@@ -2,7 +2,7 @@ bl_info = {
 	"name": "Looking Glass Viewport",
 	"author": "Gottfried Hofmann",
 	"version": (1, 2),
-	"blender": (2, 80, 0),
+	"blender": (2, 79, 0),
 	"location": "Spacebar > View3D Offscreen Draw",
 	"description": "Creates a window showing the viewport from camera view ready for the looking glass display.",
 	"wiki_url": "",
@@ -173,29 +173,13 @@ class OffScreenDraw(bpy.types.Operator):
 	
 	# store the area from where the operator is invoked
 	area = None
-	
-	#parameters from the config file, should be read from there in the future
-	#pitch = 49.83280563354492
-	#slope = 5.195750713348389
-	center = 0.4527173638343811
-	#viewCone = 40.0
-	#invView = 1.0
-	#verticalAngle = 0.0
-	#DPI = 338.0
-	#screenW = 2560.0
-	#screenH = 1600.0
-	#flipImageX = 0.0
-	#flipImageY = 0.0
-	#flipSubp = 0.0
+
 	#dummy vars for one-time computations
 	newPitch = 0.0
 	newTilt = 0.0
 	subPixelSize = 0.0
 	redIndex = 0
 	blueIndex = 0
-	#parameters specific to the Blender implementation of the system
-	#tilesHorizontal = 4
-	#tilesVertical = 8
 	
 	@staticmethod
 	def compute_view_angles(view_cone, total_views):
@@ -831,15 +815,6 @@ class LookingGlassPreferences(AddonPreferences):
 		layout = self.layout
 		layout.prop(self, "filepath")
 
-class LKGconfig(PropertyGroup):
-	center = FloatProperty(
-			name = "Center",
-			default = 0.4727173638343811,
-			min = 0.0,
-			max = 1.0,
-			description = "Center",
-			)
-
 # ------------- The Panel ----------------
 class looking_glass_panel(bpy.types.Panel):
 		
@@ -972,8 +947,6 @@ class looking_glass_panel(bpy.types.Panel):
 		layout.prop(context.window_manager, "tilesVertical")
 
 def register():
-	bpy.utils.register_class(LKGconfig)
-	bpy.types.Scene.LKGconfig = PointerProperty(type=LKGconfig)
 	bpy.utils.register_class(looking_glass_panel)
 	bpy.utils.register_class(looking_glass_window_setup)
 	bpy.utils.register_class(OffScreenDraw)	
@@ -988,9 +961,6 @@ def unregister():
 	bpy.utils.unregister_class(looking_glass_panel)
 	bpy.types.IMAGE_MT_view.remove(menu_func)
 	bpy.utils.unregister_class(LookingGlassPreferences)
-	del bpy.types.Scene.LKGconfig
-	bpy.utils.unregister_class(LKGconfig)
-
 
 if __name__ == "__main__":
 	register()
