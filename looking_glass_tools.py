@@ -1,10 +1,10 @@
 bl_info = {
-	"name": "Looking Glass Viewport",
-	"author": "Gottfried Hofmann",
-	"version": (1, 2),
+	"name": "Looking Glass Toolset",
+	"author": "Gottfried Hofmann, Kyle Appelgate",
+	"version": (1, 3),
 	"blender": (2, 79, 0),
-	"location": "Spacebar > View3D Offscreen Draw",
-	"description": "Creates a window showing the viewport from camera view ready for the looking glass display.",
+	"location": "3D View > Looking Glass Tab",
+	"description": "Creates a window showing the viewport from camera view ready for the looking glass display. Builds a render-setup for offline rendering looking glass-compatible images.",
 	"wiki_url": "",
 	"category": "View",
 	}
@@ -14,6 +14,7 @@ import bpy
 import gpu
 import json
 import subprocess
+import logging
 from bgl import *
 from math import *
 from mathutils import *
@@ -160,11 +161,147 @@ def create_shader_program():
 	glDeleteShader(shaderVert)
 	glDeleteShader(shaderFrag)
 
+class lkgRenderSetup(bpy.types.Operator):
+	bl_idname = "lookingglass.render_setup"
+	bl_label = "Looking Glass Render Setup"
+	bl_description = "Creates render setup for offline rendering utilizing multiview."
+	bl_options = {'REGISTER', 'UNDO'}
 
+	currentMultiview = None
+
+	log = logging.getLogger('bpy.ops.%s' % bl_idname)
+	log.setLevel('DEBUG')
+
+	@staticmethod
+	def makeMultiview():
+		bpy.ops.object.empty_add(
+			type='CUBE',
+			view_align=False,
+			location=(0, 0, 0)
+		)
+
+		global currentMultiview
+		currentMultiview = bpy.context.active_object
+		currentMultiview.name = 'Multiview'
+
+		#* driver for height
+		driver = currentMultiview.driver_add('scale', 1).driver
+		scalex = driver.variables.new()
+		scalex.name = "scalex"
+		scalex.targets[0].id = currentMultiview
+		scalex.targets[0].data_path = 'scale.x'
+		driver.expression = 'scalex * 10 / 16'
+
+	def makeCamera(self, i):
+		''' Create Camera '''
+		self.log.info("Creating Camera")
+		wm = bpy.context.window_manager
+		numViews = wm.tilesHorizontal * wm.tilesVertical
+		viewCone = wm.viewCone
+		#why a field of view of 13.5 degrees?
+		#fov = 13.5
+		fov = 35.5
+
+		bpy.ops.object.camera_add(
+			view_align=False,
+			enter_editmode=False,
+			location=(0, 0, 0),
+			rotation=(0,0,0)
+		)
+		cam = bpy.context.active_object
+		cam.name = 'cam.' + str(i).zfill(2)
+		cam.data.lens_unit = 'FOV'
+		cam.data.angle = radians(fov)
+
+		#* parent it to current multi view
+		global currentMultiview
+		currentMultiview.select = True
+		bpy.context.scene.objects.active = currentMultiview
+		bpy.ops.object.parent_set(type='OBJECT', keep_transform=True)
+
+		#* driver for cam distance
+		# driver = cam.driver_add('location', 2).driver
+		# viewSize = driver.variables.new()
+		# viewSize.name = 'viewSize'
+		# viewSize.targets[0].id = currentMultiview
+		# viewSize.targets[0].data_path = 'scale'
+		# camAngle = driver.variables.new()
+		# camAngle.name = 'camAngle'
+		# camAngle.targets[0].id_type = 'CAMERA'
+		# camAngle.targets[0].id = cam.data
+		# camAngle.targets[0].data_path = 'angle'
+		# driver.expression = 'viewSize.x / tan(0.5 * camAngle)' 
+		camLocZ = currentMultiview.scale[0] / tan(0.5 * cam.data.angle)
+		cam.location[2] = camLocZ
+
+		#* driver for cam x pos
+		#driver = cam.driver_add('location', 0).driver
+		#viewSize = driver.variables.new()
+		#viewSize.name = 'viewSize'
+		#viewSize.targets[0].id = currentMultiview
+		#viewSize.targets[0].data_path = 'scale'
+		#camDist = driver.variables.new()
+		#camDist.name = 'camDist'
+		#camDist.targets[0].id = cam
+		#camDist.targets[0].data_path = 'location.z'
+		angleStr = radians(-viewCone * 0.5 + viewCone * (i / (numViews - 1)))
+		#driver.expression = 'camDist * tan(' + angleStr + ') / viewSize.x'
+		camLocX = cam.location[2] * tan(angleStr) / currentMultiview.scale[0]
+		self.log.info("Camera X location: %f" % camLocX)
+		self.log.info("Camera Z location: %f" % cam.location[2])
+		cam.location[0] = camLocX
+
+		#* driver for shift x
+		driver = cam.data.driver_add('shift_x').driver
+		xpos = driver.variables.new()
+		xpos.name = 'xpos'
+		xpos.targets[0].id = cam
+		xpos.targets[0].data_path = 'location.x'
+		viewSize = driver.variables.new()
+		viewSize.name = 'viewSize'
+		viewSize.targets[0].id = currentMultiview
+		viewSize.targets[0].data_path = 'scale'
+		driver.expression = '-0.5 * xpos'
+
+		#* set up view
+		bpy.ops.scene.render_view_add()
+		newView = bpy.context.scene.render.views.active
+		newView.name = 'view.' + str(i).zfill(2)
+		newView.camera_suffix = '.' + str(i).zfill(2)
+
+	def makeAllCameras(self):
+		self.log.info("Make all cameras")
+		wm = bpy.context.window_manager
+		numViews = wm.tilesHorizontal * wm.tilesVertical
+		self.log.info("Creating %d Cameras" % numViews)
+		for i in range(0, numViews):
+			self.makeCamera(i)
+
+	#@staticmethod
+	def setupMultiView(self):
+		self.log.info("Setting up Multiview")
+		render = bpy.context.scene.render
+		render.use_multiview = True
+		if "left" in render.views:
+			render.views["left"].use = False
+		if "right" in render.views:
+			render.views["right"].use = False
+		render.views_format = 'MULTIVIEW'
+
+	def execute(self, context):
+		# TODO: find a better way, this here is tricky
+		bpy.ops.ed.undo_push()
+		self.setupMultiView()
+		self.makeMultiview()
+		self.makeAllCameras()
+		#* need to set the scene camera otherwise it won't render by code?
+		context.scene.camera = bpy.data.objects['cam.00']
+
+		return {'FINISHED'}
 
 class OffScreenDraw(bpy.types.Operator):
 	bl_idname = "view3d.offscreen_draw"
-	bl_label = "View3D Offscreen Draw"
+	bl_label = "Looking Glass Live View"
 
 	_handle_calc = None
 	_handle_draw = None
@@ -705,7 +842,6 @@ class OffScreenDraw(bpy.types.Operator):
 
 			if context.area:
 				# store the editor window from where the operator whas invoked
-				#self.area = context.area
 				context.area.tag_redraw()
 			
 			scn = context.scene
@@ -779,7 +915,6 @@ class looking_glass_window_setup(bpy.types.Operator):
 			wm.flipImageY = float(config_json['flipImageY']['value'])
 			wm.flipSubp = float(config_json['flipSubp']['value'])
 
-			#print(wm.center)
 		except:
 			print("Loading of config failed. Check file path of config utility in the addon preferences.")
 
@@ -793,7 +928,6 @@ class looking_glass_window_setup(bpy.types.Operator):
 		area = bpy.context.window_manager.windows[-1].screen.areas[0]
 		area.type = 'IMAGE_EDITOR'
 		OffScreenDraw.area = area
-		#bpy.ops.view3d.offscreen_draw()
 		self.load_calibration()
 		print("Loaded Calibration")
 		return {'FINISHED'}
@@ -930,7 +1064,8 @@ class looking_glass_panel(bpy.types.Panel):
 
 	def draw(self, context):
 		layout = self.layout
-		layout.operator("lookingglass.window_setup", text="Create Window", icon='PLUGIN')
+		layout.operator("lookingglass.window_setup", text="Create Live Window", icon='PLUGIN')
+		layout.operator("lookingglass.render_setup", text="Create Render Setup", icon='PLUGIN')
 		layout.prop(context.window_manager, "pitch")
 		layout.prop(context.window_manager, "slope")
 		layout.prop(context.window_manager, "center")
@@ -949,7 +1084,8 @@ class looking_glass_panel(bpy.types.Panel):
 def register():
 	bpy.utils.register_class(looking_glass_panel)
 	bpy.utils.register_class(looking_glass_window_setup)
-	bpy.utils.register_class(OffScreenDraw)	
+	bpy.utils.register_class(OffScreenDraw)
+	bpy.utils.register_class(lkgRenderSetup)	
 	bpy.types.IMAGE_MT_view.append(menu_func)
 	bpy.utils.register_class(LookingGlassPreferences)
 	looking_glass_window_setup.load_calibration()
@@ -959,6 +1095,7 @@ def unregister():
 	bpy.utils.unregister_class(OffScreenDraw)
 	bpy.utils.unregister_class(looking_glass_window_setup)
 	bpy.utils.unregister_class(looking_glass_panel)
+	bpy.utils.unregister_class(lkgRenderSetup)
 	bpy.types.IMAGE_MT_view.remove(menu_func)
 	bpy.utils.unregister_class(LookingGlassPreferences)
 
