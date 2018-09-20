@@ -72,21 +72,20 @@ class looking_glass_render_viewer(bpy.types.Panel):
 	bl_region_type = "TOOLS"
 	bl_category = "Looking Glass"
 
-	bpy.types.Scene.image_name = bpy.props.StringProperty(
-			name = '',
-			description = "Multiview Image for LKG"
-			)
+	# the pointer property only works in Blender 2.79 or higher
+	# older versions will crash
+	bpy.types.Scene.LKG_image = bpy.props.PointerProperty(
+		name="LKG Image",
+		type=bpy.types.Image,
+		description = "Multiview Image for LKG"
+		)
 
 	def draw(self, context):
 		layout = self.layout
 		layout.operator("lookingglass.render_setup", text="Create Render Setup", icon='PLUGIN')
 		layout.operator("lookingglass.window_setup", text="Create LKG Window", icon='PLUGIN')
 
-		# create two elements in one row 
-		col = layout.column()
-		row = col.row(align=True)
-		row.prop_search(context.scene, 'image_name', bpy.data, 'images')
-		row.operator("image.open", icon="FILE_FOLDER", text="")
+		layout.template_ID(context.scene, "LKG_image", open="image.open")
 		
 
 # ------------- The Config Panel ----------------
