@@ -115,13 +115,18 @@ class lkgRenderSetup(bpy.types.Operator):
 		newView.name = 'view.' + str(i).zfill(2)
 		newView.camera_suffix = '.' + str(i).zfill(2)
 
+		return cam
+
 	def makeAllCameras(self):
 		self.log.info("Make all cameras")
 		wm = bpy.context.window_manager
 		numViews = wm.tilesHorizontal * wm.tilesVertical
 		self.log.info("Creating %d Cameras" % numViews)
+		allCameras = []
 		for i in range(0, numViews):
-			self.makeCamera(i)
+			cam = self.makeCamera(i)
+			allCameras.append(cam)
+		return allCameras
 
 	#@staticmethod
 	def setupMultiView(self):
@@ -139,9 +144,11 @@ class lkgRenderSetup(bpy.types.Operator):
 		bpy.ops.ed.undo_push()
 		self.setupMultiView()
 		self.makeMultiview()
-		self.makeAllCameras()
+		allCameras = self.makeAllCameras()
 		#* need to set the scene camera otherwise it won't render by code?
-		context.scene.camera = bpy.data.objects['cam.00']
+		# for a meaningful view set the middle camera active
+		numCams = len(allCameras)
+		context.scene.camera = allCameras[int(floor(numCams/2))]
 
 		return {'FINISHED'}
 

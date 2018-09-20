@@ -166,6 +166,8 @@ class OffScreenDraw(bpy.types.Operator):
 	_handle_draw = None
 	_handle_draw_3dview = None
 	is_enabled = False
+	# array of texture to view multiview renders in the LGK
+	_LKGtexArray = []
 	
 	# store the area from where the operator is invoked
 	area = None
@@ -254,54 +256,86 @@ class OffScreenDraw(bpy.types.Operator):
 			
 		for i in range(len(offscreens)):
 			self._update_offscreen_m(override, offscreens[i], modelview_matrices[i], projection_matrices[i])
+
+	def _setup_matrices_from_existing_cameras(self, context, cam_parent):
+		modelview_matrices = []
+		projection_matrices = []
+		for cam in cam_parent.children:
+			modelview_matrix, projection_matrix = self._setup_matrices_from_camera(context, cam)
+			modelview_matrices.append(modelview_matrix)
+			projection_matrices.append(projection_matrix)
+		return modelview_matrices, projection_matrices
+		
 			
 	@staticmethod
 	def draw_callback_px(self, context):
-		''' Manges the draw handler '''
+		''' Manges the draw handler for the live view '''
 		scene = context.scene
 		render = scene.render
 		wm = context.window_manager
-		
+
 		#should be the same aspect ratio as the looking glass display
-		aspect_ratio = scene.render.resolution_x / scene.render.resolution_y
+		aspect_ratio = render.resolution_x / render.resolution_y
 		
 		total_views = wm.tilesHorizontal * wm.tilesVertical
-		
-		camera_active = scene.camera
-		modelview_matrix, projection_matrix = self._setup_matrices_from_camera(context, camera_active)
-		
-		# compute the field of view from projection matrix directly
-		# because focal length fov in Cycles is a disc
-		view_cone = 2.0*atan( 1.0/projection_matrix[1][1] ) 	   
-		view_angles = self.compute_view_angles(view_cone, total_views)
-		
-		if camera_active.data.dof_object == None:
-			convergence_distance = camera_active.data.dof_distance
-		else:
-			convergence_vector = camera_active.location - camera_active.data.dof_object.location
-			convergence_distance = convergence_vector.magnitude
 
-		size = convergence_distance * tan(view_cone * 0.5)
-		
-		x_offsets = self.compute_x_offsets(convergence_distance, view_angles)		
-		projection_offsets = self.compute_projection_offsets(x_offsets, aspect_ratio, size)
-		
+		#check whether multiview render setup has been created
+		cam_parent = bpy.data.objects.get("Multiview")
+		if cam_parent is not None:
+			modelview_matrices, projection_matrices = self._setup_matrices_from_existing_cameras(context, cam_parent)			
+		else:
+			camera_active = scene.camera
+			modelview_matrix, projection_matrix = self._setup_matrices_from_camera(self, context, camera_active)
+			
+			# compute the field of view from projection matrix directly
+			# because focal length fov in Cycles is a disc
+			view_cone = 2.0*atan( 1.0/projection_matrix[1][1] ) 	   
+			view_angles = self.compute_view_angles(view_cone, total_views)
+			
+			if camera_active.data.dof_object == None:
+				convergence_distance = camera_active.data.dof_distance
+			else:
+				convergence_vector = camera_active.location - camera_active.data.dof_object.location
+				convergence_distance = convergence_vector.magnitude
+
+			size = convergence_distance * tan(view_cone * 0.5)
+			
+			x_offsets = self.compute_x_offsets(convergence_distance, view_angles)		
+			projection_offsets = self.compute_projection_offsets(x_offsets, aspect_ratio, size)
+
+			#create lists of matrices for modelview and projection
+			modelview_matrices = self.setup_modelview_matrices(modelview_matrix, x_offsets)
+			projection_matrices = self.setup_projection_matrices(projection_matrix, projection_offsets)
+
 		# prepare offscreen render buffers
 		offscreens = self._setup_offscreens(context, total_views)
-
-		#create lists of matrices for modelview and projection
-		modelview_matrices = self.setup_modelview_matrices(modelview_matrix, x_offsets)
-		projection_matrices = self.setup_projection_matrices(projection_matrix, projection_offsets)
 		
 		# render the scene total_views times from different angles and store the results in offscreen objects
 		self.update_offscreens(self, context, offscreens, modelview_matrices, projection_matrices)		
 		
 
 		self._opengl_draw(context, offscreens, aspect_ratio, 1.0)
+
+	@staticmethod
+	def draw_callback_viewer(self, context):
+		''' Manges the draw handler for the multiview image viewer '''
+		scene = context.scene
+		render = scene.render
+
+		#should be the same aspect ratio as the looking glass display
+		aspect_ratio = render.resolution_x / render.resolution_y
+
+		if scene.LKG_image != None:
+			offscreens = None
+			self._opengl_draw(context, offscreens, aspect_ratio, 1.0)
+		else:
+			print("No image selected to draw in the LKG, removing viewer")
+			self.cancel(context)
+
 		
 	@staticmethod
 	def draw_callback_3dview(self, context):
-		''' Redraw the are stored in self.area whenever the 3D view updates '''
+		''' Redraw the area stored in self.area whenever the 3D view updates '''
 		self.area.tag_redraw()
 
 	@staticmethod
@@ -315,6 +349,14 @@ class OffScreenDraw(bpy.types.Operator):
 				)
 		OffScreenDraw._handle_draw_3dview = bpy.types.SpaceView3D.draw_handler_add(
 				self.draw_callback_3dview, (self, context),
+				'WINDOW', 'POST_PIXEL',
+				)
+
+	@staticmethod
+	def handle_add_viewer(self, context):
+		''' The handler to view multiview image sequences '''
+		OffScreenDraw._handle_draw = bpy.types.SpaceImageEditor.draw_handler_add(
+				self.draw_callback_viewer, (self, context),
 				'WINDOW', 'POST_PIXEL',
 				)
 
@@ -342,7 +384,7 @@ class OffScreenDraw(bpy.types.Operator):
 				offscreen = None
 			offscreens.append(offscreen)
 		
-		# do not return a list when only one offscreen is set up	
+		# do not return a list when only one offscreen is set up (deprecated)	
 		if num_offscreens == 1:
 			return offscreens[0]
 		else:
@@ -491,107 +533,20 @@ class OffScreenDraw(bpy.types.Operator):
 			texLoc = glGetUniformLocation(program, tex_name)
 			glUniform1i(texLoc, i)
 
-		#run the texture binding in reverse to bind texture 0 last
-		for i, tex_slot in reversed(list(enumerate(tex_slots))):
-			glActiveTexture(tex_slot)
-			glBindTexture(GL_TEXTURE_2D, offscreens[i].color_texture)
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER) 
-		
-		
-		# glActiveTexture(GL_TEXTURE30)
-		# glBindTexture(GL_TEXTURE_2D, offscreens[30].color_texture)
-		# glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER)
-		# glActiveTexture(GL_TEXTURE29)
-		# glBindTexture(GL_TEXTURE_2D, offscreens[29].color_texture)
-		# glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER)
-		# glActiveTexture(GL_TEXTURE28)
-		# glBindTexture(GL_TEXTURE_2D, offscreens[28].color_texture)
-		# glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER) 
-		# glActiveTexture(GL_TEXTURE27)
-		# glBindTexture(GL_TEXTURE_2D, offscreens[27].color_texture)
-		# glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER) 
-		# glActiveTexture(GL_TEXTURE26)
-		# glBindTexture(GL_TEXTURE_2D, offscreens[26].color_texture)
-		# glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER) 
-		# glActiveTexture(GL_TEXTURE25)
-		# glBindTexture(GL_TEXTURE_2D, offscreens[25].color_texture)
-		# glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER) 
-		# glActiveTexture(GL_TEXTURE24)
-		# glBindTexture(GL_TEXTURE_2D, offscreens[24].color_texture)
-		# glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER) 
-		# glActiveTexture(GL_TEXTURE23)
-		# glBindTexture(GL_TEXTURE_2D, offscreens[23].color_texture)
-		# glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER)   	 
-		# glActiveTexture(GL_TEXTURE22)
-		# glBindTexture(GL_TEXTURE_2D, offscreens[22].color_texture)
-		# glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER)   	 
-		# glActiveTexture(GL_TEXTURE21)
-		# glBindTexture(GL_TEXTURE_2D, offscreens[21].color_texture)
-		# glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER)   	 
-		# glActiveTexture(GL_TEXTURE20)
-		# glBindTexture(GL_TEXTURE_2D, offscreens[20].color_texture)
-		# glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER)   	 
-		# glActiveTexture(GL_TEXTURE19)
-		# glBindTexture(GL_TEXTURE_2D, offscreens[19].color_texture)
-		# glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER)   	 
-		# glActiveTexture(GL_TEXTURE18)
-		# glBindTexture(GL_TEXTURE_2D, offscreens[18].color_texture)
-		# glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER)   	 
-		# glActiveTexture(GL_TEXTURE17)
-		# glBindTexture(GL_TEXTURE_2D, offscreens[17].color_texture)
-		# glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER)   	 
-		# glActiveTexture(GL_TEXTURE16)
-		# glBindTexture(GL_TEXTURE_2D, offscreens[16].color_texture)
-		# glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER)
-		# glActiveTexture(GL_TEXTURE15)
-		# glBindTexture(GL_TEXTURE_2D, offscreens[15].color_texture)
-		# glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER) 
-		# glActiveTexture(GL_TEXTURE14)
-		# glBindTexture(GL_TEXTURE_2D, offscreens[14].color_texture)
-		# glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER)
-		# glActiveTexture(GL_TEXTURE13)
-		# glBindTexture(GL_TEXTURE_2D, offscreens[13].color_texture)
-		# glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER)
-		# glActiveTexture(GL_TEXTURE12)
-		# glBindTexture(GL_TEXTURE_2D, offscreens[12].color_texture)
-		# glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER) 
-		# glActiveTexture(GL_TEXTURE11)
-		# glBindTexture(GL_TEXTURE_2D, offscreens[11].color_texture)
-		# glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER) 
-		# glActiveTexture(GL_TEXTURE10)
-		# glBindTexture(GL_TEXTURE_2D, offscreens[10].color_texture)
-		# glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER) 
-		# glActiveTexture(GL_TEXTURE9)
-		# glBindTexture(GL_TEXTURE_2D, offscreens[9].color_texture)
-		# glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER) 
-		# glActiveTexture(GL_TEXTURE8)
-		# glBindTexture(GL_TEXTURE_2D, offscreens[8].color_texture)
-		# glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER) 
-		# glActiveTexture(GL_TEXTURE7)
-		# glBindTexture(GL_TEXTURE_2D, offscreens[7].color_texture)
-		# glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER)   	 
-		# glActiveTexture(GL_TEXTURE6)
-		# glBindTexture(GL_TEXTURE_2D, offscreens[6].color_texture)
-		# glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER)   	 
-		# glActiveTexture(GL_TEXTURE5)
-		# glBindTexture(GL_TEXTURE_2D, offscreens[5].color_texture)
-		# glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER)   	 
-		# glActiveTexture(GL_TEXTURE4)
-		# glBindTexture(GL_TEXTURE_2D, offscreens[4].color_texture)
-		# glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER)   	 
-		# glActiveTexture(GL_TEXTURE3)
-		# glBindTexture(GL_TEXTURE_2D, offscreens[3].color_texture)
-		# glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER)   	 
-		# glActiveTexture(GL_TEXTURE2)
-		# glBindTexture(GL_TEXTURE_2D, offscreens[2].color_texture)
-		# glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER)   	 
-		# glActiveTexture(GL_TEXTURE1)
-		# glBindTexture(GL_TEXTURE_2D, offscreens[1].color_texture)
-		# glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER)   	 
-		# glActiveTexture(GL_TEXTURE0)
-		# glBindTexture(GL_TEXTURE_2D, offscreens[0].color_texture)
-		# glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER)   	
-		
+		# checking for offscreens is a hack. TODO: refactor
+		if offscreens != None:	
+			#run the texture binding in reverse to bind texture 0 last
+			for i, tex_slot in reversed(list(enumerate(tex_slots))):
+				glActiveTexture(tex_slot)
+				glBindTexture(GL_TEXTURE_2D, offscreens[i].color_texture)
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER)
+		else:
+			for i, tex_slot in reversed(list(enumerate(tex_slots))):
+				self._LKGtexArray[i].gl_load()
+				glActiveTexture(tex_slot)
+				glBindTexture(GL_TEXTURE_2D, self._LKGtexArray[i].bindcode[0])
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER)
+
 		
 		texco = [(1, 1), (0, 1), (0, 0), (1, 0)]
 		verco = [(1.0, 1.0), (-1.0, 1.0), (-1.0, -1.0), (1.0, -1.0)]
@@ -641,7 +596,26 @@ class OffScreenDraw(bpy.types.Operator):
 			return {'FINISHED'}
 
 		else:
-			OffScreenDraw.handle_add(self, context)
+			# get the global properties from window manager
+			wm = context.window_manager	
+
+			# when the user has loaded an image in the LKG tools panel, assume it is meant for viewing in the LKG as multiview
+			if context.scene.LKG_image != None:
+				num_multiview_images = int(wm.tilesHorizontal * wm.tilesVertical)
+				multiview_first_image_path = context.scene.LKG_image.filepath
+				#split into file, view number and extension
+				multiview_image_path_split = multiview_first_image_path.rsplit('.',2)
+				self._LKGtexArray = []
+
+				for i in range(num_multiview_images):
+					img_str = multiview_image_path_split[0] + '.' + str(i).zfill(2) + '.' + multiview_image_path_split[2]
+					tex = bpy.data.images.load(img_str)
+					self._LKGtexArray.append(tex)
+
+				OffScreenDraw.handle_add_viewer(self, context)
+			else:
+				OffScreenDraw.handle_add(self, context)
+
 			OffScreenDraw.is_enabled = True
 
 			if context.area:
@@ -649,8 +623,6 @@ class OffScreenDraw(bpy.types.Operator):
 				context.area.tag_redraw()
 			
 			scn = context.scene
-			# get the global properties from window manager
-			wm = context.window_manager	
 			#some parameters for the shader need to be computed once
 			self.newPitch = wm.pitch * (wm.screenW / wm.DPI) * cos(atan(1 / wm.slope))
 			self.newTilt = wm.screenH / (wm.screenW * wm.slope)
@@ -669,11 +641,14 @@ class OffScreenDraw(bpy.types.Operator):
 
 			# the focal distance of the active camera is used as focal plane
 			# thus it should not be 0 because then the system won't work
-			cam = context.scene.camera
-			if cam.data.dof_distance == 0.0:
-				# using distance of the camera to the center of the scene as educated guess
-				# for the initial distance of the focal plane
-				cam.data.dof_distance = cam.location.magnitude
+			try:
+				cam = context.scene.camera
+				if cam.data.dof_distance == 0.0:
+					# using distance of the camera to the center of the scene as educated guess
+					# for the initial distance of the focal plane
+					cam.data.dof_distance = cam.location.magnitude
+			except:
+				print("Need an active camera in the scene")
 
 			# change the render aspect ratio so the view in the looking glass does not get deformed
 			aspect_ratio = wm.screenW / wm.screenH
@@ -738,14 +713,12 @@ class looking_glass_window_setup(bpy.types.Operator):
 
 def menu_func(self, context):
 	''' Helper function to add the operator to menus '''
-	print("appended the menu function")
 	self.layout.operator(OffScreenDraw.bl_idname)
 
 def register():
 	bpy.utils.register_class(OffScreenDraw)
 	bpy.utils.register_class(looking_glass_window_setup)
 	bpy.types.IMAGE_MT_view.append(menu_func)
-	print("registered the live view")
 
 def unregister():
 	bpy.utils.unregister_class(looking_glass_window_setup)

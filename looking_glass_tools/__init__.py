@@ -19,10 +19,10 @@
 bl_info = {
 	"name": "Looking Glass Toolset",
 	"author": "Gottfried Hofmann, Kyle Appelgate",
-	"version": (1, 4),
+	"version": (1, 5),
 	"blender": (2, 79, 0),
 	"location": "3D View > Looking Glass Tab",
-	"description": "Creates a window showing the viewport from camera view ready for the looking glass display. Builds a render-setup for offline rendering looking glass-compatible images.",
+	"description": "Creates a window showing the viewport from camera view ready for the looking glass display. Builds a render-setup for offline rendering looking glass-compatible images. Allows to view images rendered for looking glass by selecting the first image of the multiview sequence.",
 	"wiki_url": "",
 	"category": "View",
 	}
@@ -85,7 +85,10 @@ class looking_glass_render_viewer(bpy.types.Panel):
 		layout.operator("lookingglass.render_setup", text="Create Render Setup", icon='PLUGIN')
 		layout.operator("lookingglass.window_setup", text="Create LKG Window", icon='PLUGIN')
 
-		layout.template_ID(context.scene, "LKG_image", open="image.open")
+		row = layout.row(align = True)
+		row.label("LKG image to view:")
+		row = layout.row(align = True)
+		row.template_ID(context.scene, "LKG_image", open="image.open")
 		
 
 # ------------- The Config Panel ----------------
