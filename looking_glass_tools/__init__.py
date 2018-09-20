@@ -72,10 +72,22 @@ class looking_glass_render_viewer(bpy.types.Panel):
 	bl_region_type = "TOOLS"
 	bl_category = "Looking Glass"
 
+	bpy.types.Scene.image_name = bpy.props.StringProperty(
+			name = '',
+			description = "Multiview Image for LKG"
+			)
+
 	def draw(self, context):
 		layout = self.layout
-		layout.operator("lookingglass.window_setup", text="Create LKG Window", icon='PLUGIN')
 		layout.operator("lookingglass.render_setup", text="Create Render Setup", icon='PLUGIN')
+		layout.operator("lookingglass.window_setup", text="Create LKG Window", icon='PLUGIN')
+
+		# create two elements in one row 
+		col = layout.column()
+		row = col.row(align=True)
+		row.prop_search(context.scene, 'image_name', bpy.data, 'images')
+		row.operator("image.open", icon="FILE_FOLDER", text="")
+		
 
 # ------------- The Config Panel ----------------
 class looking_glass_panel(bpy.types.Panel):
