@@ -62,12 +62,27 @@ class LookingGlassPreferences(AddonPreferences):
 		layout = self.layout
 		layout.prop(self, "filepath")
 
-# ------------- The Panel ----------------
+# ------------- The Tools Panel ----------------
+class looking_glass_render_viewer(bpy.types.Panel):
+		
+	""" Looking Glass Render Viewer """ 
+	bl_idname = "lookingglass.panel_tools" # unique identifier for buttons and menu items to reference.
+	bl_label = "Looking Glass Tools" # display name in the interface.
+	bl_space_type = "VIEW_3D"
+	bl_region_type = "TOOLS"
+	bl_category = "Looking Glass"
+
+	def draw(self, context):
+		layout = self.layout
+		layout.operator("lookingglass.window_setup", text="Create LKG Window", icon='PLUGIN')
+		layout.operator("lookingglass.render_setup", text="Create Render Setup", icon='PLUGIN')
+
+# ------------- The Config Panel ----------------
 class looking_glass_panel(bpy.types.Panel):
 		
-	""" Looking Glass Tools and Properties """ 
-	bl_idname = "lookingglass.panel" # unique identifier for buttons and menu items to reference.
-	bl_label = "Looking Glass" # display name in the interface.
+	""" Looking Glass Properties """ 
+	bl_idname = "lookingglass.panel_config" # unique identifier for buttons and menu items to reference.
+	bl_label = "Looking Glass Configuration" # display name in the interface.
 	bl_space_type = "VIEW_3D"
 	bl_region_type = "TOOLS"
 	bl_category = "Looking Glass"
@@ -177,8 +192,6 @@ class looking_glass_panel(bpy.types.Panel):
 
 	def draw(self, context):
 		layout = self.layout
-		layout.operator("lookingglass.window_setup", text="Create Live Window", icon='PLUGIN')
-		layout.operator("lookingglass.render_setup", text="Create Render Setup", icon='PLUGIN')
 		layout.prop(context.window_manager, "pitch")
 		layout.prop(context.window_manager, "slope")
 		layout.prop(context.window_manager, "center")
@@ -193,7 +206,6 @@ class looking_glass_panel(bpy.types.Panel):
 		layout.prop(context.window_manager, "flipSubp")
 		layout.prop(context.window_manager, "tilesHorizontal")
 		layout.prop(context.window_manager, "tilesVertical")
-
 
 def register():
 	bpy.utils.register_module(__name__)
