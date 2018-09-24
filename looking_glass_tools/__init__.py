@@ -19,7 +19,7 @@
 bl_info = {
 	"name": "Looking Glass Toolset",
 	"author": "Gottfried Hofmann, Kyle Appelgate",
-	"version": (1, 5),
+	"version": (1, 6),
 	"blender": (2, 79, 0),
 	"location": "3D View > Looking Glass Tab",
 	"description": "Creates a window showing the viewport from camera view ready for the looking glass display. Builds a render-setup for offline rendering looking glass-compatible images. Allows to view images rendered for looking glass by selecting the first image of the multiview sequence.",
@@ -32,22 +32,44 @@ if "bpy" in locals():
 	import importlib
 	importlib.reload(looking_glass_live_view)
 	importlib.reload(looking_glass_render_setup)
-	#importlib.reload(looking_glass_ui)
 else:
 	from . import looking_glass_live_view
 	from . import looking_glass_render_setup
-	#from . import looking_glass_ui
 
 import bpy
 import gpu
 import json
 import subprocess
 import logging
+import os
+import platform
 from bgl import *
 from math import *
 from mathutils import *
 from bpy.types import AddonPreferences, PropertyGroup
 from bpy.props import FloatProperty, PointerProperty
+
+# TODO: Make this a class method
+def set_defaults():
+	''' Returns the file path of the configuration utility shipping with the addon '''
+	script_file = os.path.realpath(__file__)
+	directory = os.path.dirname(script_file)
+
+	if platform.system() == "Linux":
+		filepath = directory + "/c_calibration_loader_linux_x86"
+		print("File path of calibration loader: " + filepath)
+		return filepath
+	elif platform.system() == "Windows":
+		filepath = directory + "\c_calibration_loader_win.exe"
+		print("File path of calibration loader: " + filepath)
+		return filepath
+	elif platform.system() == "Darwin":
+		filepath = directory + "/c_calibration_loader_mac"
+		print("File path of calibration loader: " + filepath)
+		return filepath
+	else:
+		print("Operating system not recognized, path to calibration utility nees to be set manually.")
+		return ''
 
 class LookingGlassPreferences(AddonPreferences):
 	# this must match the addon name
@@ -56,6 +78,7 @@ class LookingGlassPreferences(AddonPreferences):
 	filepath = bpy.props.StringProperty(
 			name="Location of the Config Extration Utility",
 			subtype='FILE_PATH',
+			default = set_defaults()
 			)
 
 	def draw(self, context):
