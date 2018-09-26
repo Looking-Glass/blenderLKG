@@ -144,7 +144,7 @@ class looking_glass_panel(bpy.types.Panel):
 	bpy.types.WindowManager.center = FloatProperty(
 			name = "Center",
 			default = 0.47,
-			min = 0.0,
+			min = -1.0,
 			max = 1.0,
 			description = "Center",
 			)
