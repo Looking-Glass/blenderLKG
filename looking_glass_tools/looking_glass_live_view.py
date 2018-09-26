@@ -285,7 +285,7 @@ class OffScreenDraw(bpy.types.Operator):
 			modelview_matrices, projection_matrices = self._setup_matrices_from_existing_cameras(context, cam_parent)			
 		else:
 			camera_active = scene.camera
-			modelview_matrix, projection_matrix = self._setup_matrices_from_camera(self, context, camera_active)
+			modelview_matrix, projection_matrix = self._setup_matrices_from_camera(context, camera_active)
 			
 			# compute the field of view from projection matrix directly
 			# because focal length fov in Cycles is a disc
