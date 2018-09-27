@@ -40,6 +40,7 @@ class lkgRenderSetup(bpy.types.Operator):
 
 	@staticmethod
 	def makeMultiview():
+		''' Create a parent object for the multiview cameras that also indicates the view space of the LKG '''
 		bpy.ops.object.empty_add(
 			type='CUBE',
 			view_align=False,
@@ -50,13 +51,10 @@ class lkgRenderSetup(bpy.types.Operator):
 		currentMultiview = bpy.context.active_object
 		currentMultiview.name = 'Multiview'
 
-		#* driver for height
-		driver = currentMultiview.driver_add('scale', 1).driver
-		scalex = driver.variables.new()
-		scalex.name = "scalex"
-		scalex.targets[0].id = currentMultiview
-		scalex.targets[0].data_path = 'scale.x'
-		driver.expression = 'scalex * 10 / 16'
+		# the aspect ratio should match the one of the LKG device
+		wm = bpy.context.window_manager
+		aspectRatio = wm.screenH / wm.screenW
+		currentMultiview.scale.y = currentMultiview.scale.x * aspectRatio
 
 	def makeCamera(self, i):
 		''' Create Camera '''
@@ -91,23 +89,13 @@ class lkgRenderSetup(bpy.types.Operator):
 
 		# cam x pos
 		angleStr = radians(-viewCone * 0.5 + viewCone * (i / (numViews - 1)))
-		#driver.expression = 'camDist * tan(' + angleStr + ') / viewSize.x'
 		camLocX = cam.location[2] * tan(angleStr) / currentMultiview.scale[0]
 		self.log.info("Camera X location: %f" % camLocX)
 		self.log.info("Camera Z location: %f" % cam.location[2])
 		cam.location[0] = camLocX
 
 		#* driver for shift x
-		driver = cam.data.driver_add('shift_x').driver
-		xpos = driver.variables.new()
-		xpos.name = 'xpos'
-		xpos.targets[0].id = cam
-		xpos.targets[0].data_path = 'location.x'
-		viewSize = driver.variables.new()
-		viewSize.name = 'viewSize'
-		viewSize.targets[0].id = currentMultiview
-		viewSize.targets[0].data_path = 'scale'
-		driver.expression = '-0.5 * xpos'
+		cam.data.shift_x = (-0.5) * cam.location.x
 
 		#* set up view
 		bpy.ops.scene.render_view_add()
@@ -128,7 +116,6 @@ class lkgRenderSetup(bpy.types.Operator):
 			allCameras.append(cam)
 		return allCameras
 
-	#@staticmethod
 	def setupMultiView(self):
 		self.log.info("Setting up Multiview")
 		render = bpy.context.scene.render
