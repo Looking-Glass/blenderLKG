@@ -54,21 +54,22 @@ def set_defaults():
 	''' Returns the file path of the configuration utility shipping with the addon '''
 	script_file = os.path.realpath(__file__)
 	directory = os.path.dirname(script_file)
+	filepath = ''
 
 	if platform.system() == "Linux":
 		filepath = directory + "/c_calibration_loader_linux_x86"
-		print("File path of calibration loader: " + filepath)
-		return filepath
 	elif platform.system() == "Windows":
 		filepath = directory + "\c_calibration_loader_win.exe"
-		print("File path of calibration loader: " + filepath)
-		return filepath
 	elif platform.system() == "Darwin":
 		filepath = directory + "/c_calibration_loader_mac"
-		print("File path of calibration loader: " + filepath)
-		return filepath
 	else:
 		print("Operating system not recognized, path to calibration utility nees to be set manually.")
+		return ''
+	
+	if os.path.isfile(filepath):
+		return filepath
+	else:
+		print("Could not find pre-installed calibration loader")
 		return ''
 
 class LookingGlassPreferences(AddonPreferences):
