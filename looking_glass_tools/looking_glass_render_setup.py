@@ -39,22 +39,39 @@ class lkgRenderSetup(bpy.types.Operator):
 	log.setLevel('DEBUG')
 
 	@staticmethod
-	def makeMultiview():
-		''' Create a parent object for the multiview cameras that also indicates the view space of the LKG '''
-		bpy.ops.object.empty_add(
-			type='CUBE',
-			view_align=False,
-			location=(0, 0, 0)
-		)
+	def setParentTrans(childOb, parentOb):
+		''' Create a child-parent hierarchy similar to the operator '''
+		childOb.parent = parentOb
+		childOb.matrix_parent_inverse = parentOb.matrix_world.inverted()
+		return True
 
+	def makeMultiview(self, context):
+		''' Create a parent object for the multiview cameras that also indicates the view space of the LKG '''
+		self.log.info("Making Multiview")
+
+		scn = context.scene
 		global currentMultiview
-		currentMultiview = bpy.context.active_object
-		currentMultiview.name = 'Multiview'
+
+		currentMultiview = bpy.data.objects.new("Multiview", None)
+		scn.objects.link(currentMultiview)
+		currentMultiview.empty_draw_type = 'CUBE'
 
 		# the aspect ratio should match the one of the LKG device
 		wm = bpy.context.window_manager
 		aspectRatio = wm.screenH / wm.screenW
 		currentMultiview.scale.y = currentMultiview.scale.x * aspectRatio
+
+		# adding another empty as cone to indicate direction
+		multiviewDirection = bpy.data.objects.new("MultiviewDirection", None)
+		
+		scn.objects.link(multiviewDirection)
+		multiviewDirection.location = (0,0,1.0)
+		multiviewDirection.rotation_euler = (radians(90.0), 0, 0)
+		multiviewDirection.empty_draw_type = 'CONE'
+
+		self.setParentTrans(multiviewDirection, currentMultiview)
+
+
 
 	def makeCamera(self, i):
 		''' Create Camera '''
@@ -103,6 +120,9 @@ class lkgRenderSetup(bpy.types.Operator):
 		newView.name = 'view.' + str(i).zfill(2)
 		newView.camera_suffix = '.' + str(i).zfill(2)
 
+		#cam should be invisible in the viewport because otherwise a line will appear in the LKG
+		cam.hide = True
+
 		return cam
 
 	def makeAllCameras(self):
@@ -130,7 +150,7 @@ class lkgRenderSetup(bpy.types.Operator):
 		# TODO: find a better way, this here is tricky
 		bpy.ops.ed.undo_push()
 		self.setupMultiView()
-		self.makeMultiview()
+		self.makeMultiview(context)
 		allCameras = self.makeAllCameras()
 		#* need to set the scene camera otherwise it won't render by code?
 		# for a meaningful view set the middle camera active
