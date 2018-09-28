@@ -1,5 +1,5 @@
 # blenderLKG
-Blender SKD for the Looking Glass. Features live-display of the camera view in the image editor and an automatic render-setup for Cycles.
+Blender SKD for the Looking Glass. Features live-display of the camera view in the image editor, an automatic render-setup for Cycles and the option to view rendered multiview image sequences in the Looking Glass.
 
 ### Prerequisites
 
@@ -7,23 +7,22 @@ The addon requires Blender 2.79b, it does not work in Blender 2.8x yet.
 
 ### Installing
 
-```
-* Go to File -> User Preferences -> Add-ons -> Install Add-on from file.
+* Go to _File → User Preferences → Add-ons → Install Add-on from file_.
 * Select the .zip and click "Install Add-on from file" on the top right.
 * Enable the addon by checking the box next to it on the left.
 * Click on the triangle to open up the addon preferences.
-* In the addon preferences, click on the file browser icon.
-* Locate the calibration loader and click accept.
+    * The calibration loader should already be set there. In that case everything is fine.
+    * If not, click on the file browser icon.
+    * Locate the calibration loader and click accept.
 * Click "Save User Settings" to keep the addon enabled.
-```
 
 ### Usage
 
-```
-* The main UI can be found in the Tool Shelf -> Looking Glass Tab.
-* **Create Live Window** opens up a detached window with image editor ready. In the image editor use the new menu item View -> Looking Glass Live View to start the live display of the viewport camera. Next place the window in the Looking Glass and use ALT + F11 to make it fullscreen.
-* **Create Render Setup** will place 32 cameras parented to a cube into the scene. The cube determines what is visible inside the Looking Glass after render. The cameras are parented to the cube so move, rotate and scale the cube to place the cameras in the scene. The setup created uses the Blender multiview system.
-```
+* The main UI can be found in the _Tool Shelf → Looking Glass Tab_.
+* **Create Render Setup** will place 32 (invisible) cameras parented to an empty with cube representation into the scene. The cube determines what is visible inside the Looking Glass after render. The cameras are parented to the cube so move, rotate and scale the cube to place the cameras in the scene. The setup created uses the Blender multiview system.
+* **Create LKG Window** opens up a detached window with image editor ready. In the image editor use the new menu item _View → Looking Glass Live View_ to start the live display of the viewport camera. Next place the window in the Looking Glass and use ALT + F11 to make it fullscreen.
+* **LKG image to view** You can select an image rendered for the LKG in Blender here. Only images that have been saved to disk as multiview sequence work. The LKG window will show the image as long as one is selected in this field but you will have to run the _View → Looking Glass Live View_ command again.
+
 
 ## Authors
 
@@ -32,4 +31,4 @@ The addon requires Blender 2.79b, it does not work in Blender 2.8x yet.
 
 ## License
 
-This project is licensed under the GPL v2 License - see the [LICENSE.md](LICENSE.md) file for details
+This project is licensed under the GPL v2 License - see the [LICENSE](LICENSE) file for details.
