@@ -32,21 +32,15 @@ if "bpy" in locals():
 	import importlib
 	importlib.reload(looking_glass_live_view)
 	importlib.reload(looking_glass_render_setup)
-	#importlib.reload(lkgRenderSetup)
 else:
 	from . import *
 	from . looking_glass_render_setup import *
 	from . looking_glass_live_view import *
-	#from . looking_glass_render_setup import lkgRenderSetup
-	#from . import lkgRenderSetup
 
-#from . import looking_glass_live_view
-#from . looking_glass_render_setup import *
-#from . looking_glass_live_view import *
 
 if "looking_glass_live_view" not in globals():
 	message = ("\n\n"
-		"The Animation Nodes addon cannot be registered correctly.\n"
+		"The Looking Glass Toolset addon cannot be registered correctly.\n"
 		"Please try to remove and install it again.\n"
 		"If it still does not work, report it.\n")
 	raise Exception(message)
@@ -271,9 +265,6 @@ classes = (
 )
 
 def register():
-	#bpy.utils.register_class(OffScreenDraw)
-	#bpy.utils.register_class(looking_glass_window_setup)
-	#bpy.utils.register_class(lkgRenderSetup)
 	from bpy.utils import register_class
 	for cls in classes:
 		register_class(cls)
@@ -281,9 +272,6 @@ def register():
 	print("registered the live view")
 
 def unregister():
-	#bpy.utils.unregister_class(lkgRenderSetup)
-	#bpy.utils.unregister_class(looking_glass_window_setup)
-	#bpy.utils.unregister_class(OffScreenDraw)
 	from bpy.utils import unregister_class
 	for cls in reversed(classes):
 		unregister_class(cls)
