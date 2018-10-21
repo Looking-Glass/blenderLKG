@@ -32,9 +32,24 @@ if "bpy" in locals():
 	import importlib
 	importlib.reload(looking_glass_live_view)
 	importlib.reload(looking_glass_render_setup)
+	#importlib.reload(lkgRenderSetup)
 else:
-	from . import looking_glass_live_view
-	from . import looking_glass_render_setup
+	from . import *
+	from . looking_glass_render_setup import *
+	from . looking_glass_live_view import *
+	#from . looking_glass_render_setup import lkgRenderSetup
+	#from . import lkgRenderSetup
+
+#from . import looking_glass_live_view
+#from . looking_glass_render_setup import *
+#from . looking_glass_live_view import *
+
+if "looking_glass_live_view" not in globals():
+	message = ("\n\n"
+		"The Animation Nodes addon cannot be registered correctly.\n"
+		"Please try to remove and install it again.\n"
+		"If it still does not work, report it.\n")
+	raise Exception(message)
 
 import bpy
 import gpu
@@ -48,6 +63,7 @@ from math import *
 from mathutils import *
 from bpy.types import AddonPreferences, PropertyGroup
 from bpy.props import FloatProperty, PointerProperty
+
 
 # TODO: Make this a class method
 def set_defaults():
@@ -76,7 +92,7 @@ class LookingGlassPreferences(AddonPreferences):
 	# this must match the addon name
 	bl_idname = __name__
 
-	filepath = bpy.props.StringProperty(
+	filepath: bpy.props.StringProperty(
 			name="Location of the Config Extration Utility",
 			subtype='FILE_PATH',
 			default = set_defaults()
@@ -110,7 +126,7 @@ class looking_glass_render_viewer(bpy.types.Panel):
 		layout.operator("lookingglass.window_setup", text="Create LKG Window", icon='PLUGIN')
 
 		row = layout.row(align = True)
-		row.label("LKG image to view:")
+		row.label(text = "LKG image to view:")
 		row = layout.row(align = True)
 		row.template_ID(context.scene, "LKG_image", open="image.open")
 		
@@ -245,13 +261,32 @@ class looking_glass_panel(bpy.types.Panel):
 		layout.prop(context.window_manager, "tilesHorizontal")
 		layout.prop(context.window_manager, "tilesVertical")
 
+classes = (
+	OffScreenDraw,
+	looking_glass_window_setup,
+	lkgRenderSetup,
+	looking_glass_panel,
+	looking_glass_render_viewer,
+	LookingGlassPreferences,
+)
+
 def register():
-	bpy.utils.register_module(__name__)
+	#bpy.utils.register_class(OffScreenDraw)
+	#bpy.utils.register_class(looking_glass_window_setup)
+	#bpy.utils.register_class(lkgRenderSetup)
+	from bpy.utils import register_class
+	for cls in classes:
+		register_class(cls)
 	bpy.types.IMAGE_MT_view.append(looking_glass_live_view.menu_func)
 	print("registered the live view")
 
 def unregister():
-	bpy.utils.unregister_module(__name__)
+	#bpy.utils.unregister_class(lkgRenderSetup)
+	#bpy.utils.unregister_class(looking_glass_window_setup)
+	#bpy.utils.unregister_class(OffScreenDraw)
+	from bpy.utils import unregister_class
+	for cls in reversed(classes):
+		unregister_class(cls)
 	bpy.types.IMAGE_MT_view.remove(looking_glass_live_view.menu_func)
 
 if __name__ == "__main__":

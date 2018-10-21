@@ -722,7 +722,7 @@ def register():
 
 def unregister():
 	bpy.utils.unregister_class(looking_glass_window_setup)
-	bpy.utils.register_class(OffScreenDraw)
+	bpy.utils.unregister_class(OffScreenDraw)
 	bpy.types.IMAGE_MT_view.remove(menu_func)
 
 if __name__ == "__main__":
