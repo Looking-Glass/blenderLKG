@@ -397,10 +397,11 @@ class OffScreenDraw(bpy.types.Operator):
 		
 		modelview_matrix = camera.matrix_world.inverted()
 		projection_matrix = camera.calc_matrix_camera(
-				render.resolution_x,
-				render.resolution_y,
-				render.pixel_aspect_x,
-				render.pixel_aspect_y,
+				context.depsgraph,
+				x=render.resolution_x,
+				y=render.resolution_y,
+				scale_x=render.pixel_aspect_x,
+				scale_y=render.pixel_aspect_y,
 				)
 				
 		return modelview_matrix, projection_matrix

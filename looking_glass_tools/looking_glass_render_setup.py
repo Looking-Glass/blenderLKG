@@ -53,8 +53,8 @@ class lkgRenderSetup(bpy.types.Operator):
 		global currentMultiview
 
 		currentMultiview = bpy.data.objects.new("Multiview", None)
-		scn.objects.link(currentMultiview)
-		currentMultiview.empty_draw_type = 'CUBE'
+		scn.collection.objects.link(currentMultiview)
+		currentMultiview.empty_display_type = 'CUBE'
 
 		# the aspect ratio should match the one of the LKG device
 		wm = bpy.context.window_manager
@@ -64,10 +64,10 @@ class lkgRenderSetup(bpy.types.Operator):
 		# adding another empty as cone to indicate direction
 		multiviewDirection = bpy.data.objects.new("MultiviewDirection", None)
 		
-		scn.objects.link(multiviewDirection)
+		scn.collection.objects.link(multiviewDirection)
 		multiviewDirection.location = (0,0,1.0)
 		multiviewDirection.rotation_euler = (radians(90.0), 0, 0)
-		multiviewDirection.empty_draw_type = 'CONE'
+		multiviewDirection.empty_display_type = 'CONE'
 
 		self.setParentTrans(multiviewDirection, currentMultiview)
 
@@ -96,8 +96,8 @@ class lkgRenderSetup(bpy.types.Operator):
 
 		#* parent it to current multi view
 		global currentMultiview
-		currentMultiview.select = True
-		bpy.context.scene.objects.active = currentMultiview
+		currentMultiview.select_set('SELECT')
+		bpy.context.view_layer.objects.active = currentMultiview
 		bpy.ops.object.parent_set(type='OBJECT', keep_transform=True)
 
 		# cam distance
@@ -121,7 +121,7 @@ class lkgRenderSetup(bpy.types.Operator):
 		newView.camera_suffix = '.' + str(i).zfill(2)
 
 		#cam should be invisible in the viewport because otherwise a line will appear in the LKG
-		cam.hide = True
+		cam.hide_viewport = True
 
 		return cam
 

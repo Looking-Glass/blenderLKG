@@ -102,9 +102,10 @@ class looking_glass_render_viewer(bpy.types.Panel):
 	""" Looking Glass Render Viewer """ 
 	bl_idname = "lookingglass.panel_tools" # unique identifier for buttons and menu items to reference.
 	bl_label = "Looking Glass Tools" # display name in the interface.
-	bl_space_type = "VIEW_3D"
-	bl_region_type = "TOOLS"
-	bl_category = "Looking Glass"
+	bl_space_type = "PROPERTIES"
+	bl_region_type = "WINDOW"
+	bl_context = '.objectmode'
+	#bl_category = "Looking Glass"
 
 	# the pointer property only works in Blender 2.79 or higher
 	# older versions will crash
@@ -131,9 +132,10 @@ class looking_glass_panel(bpy.types.Panel):
 	""" Looking Glass Properties """ 
 	bl_idname = "lookingglass.panel_config" # unique identifier for buttons and menu items to reference.
 	bl_label = "Looking Glass Configuration" # display name in the interface.
-	bl_space_type = "VIEW_3D"
-	bl_region_type = "TOOLS"
-	bl_category = "Looking Glass"
+	bl_space_type = "PROPERTIES"
+	bl_region_type = "WINDOW"
+	bl_context = '.objectmode'
+	#bl_category = "Looking Glass"
 
 	# exposed parameters stored in WindowManager as global props so they 
 	# can be changed even when loading the addon (due to config file parsing)
