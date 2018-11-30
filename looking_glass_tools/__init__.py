@@ -215,14 +215,16 @@ class looking_glass_panel(bpy.types.Panel):
 			)
 	bpy.types.WindowManager.tilesHorizontal = bpy.props.IntProperty(
 			name = "Horizontal Tiles",
-			default = 4,
+			# changed to 5 for hires -k
+			default = 5,
 			min = 0,
 			max = 100,
 			description = "How many views to store horizontally",
 			)
 	bpy.types.WindowManager.tilesVertical = bpy.props.IntProperty(
 			name = "Vertical Tiles",
-			default = 8,
+			# changed to 9 for hires -k
+			default = 9,
 			min = 0,
 			max = 100,
 			description = "How many views to store horizontally",

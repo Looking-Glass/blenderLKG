@@ -26,137 +26,12 @@ from math import *
 from mathutils import *
 from bpy.types import AddonPreferences, PropertyGroup
 from bpy.props import FloatProperty, PointerProperty
+# additions -k
+import ctypes
 
-# The shaders are stored as strings
-# The vertex shader yields the texture coordinates for the fragment shader
-shaderVertString = """
-varying vec2 v_texCoord0;
-void main()
-{
-	gl_Position =  ftransform();
-	v_texCoord0 = vec2(gl_MultiTexCoord0);    
-}
-"""
+holoplay = ctypes.CDLL("C:\\Users\\grena\\AppData\\Roaming\\Blender Foundation\\Blender\\2.79\\scripts\\addons\\looking_glass_tools\\HoloPlayAPI")
 
-shaderFragString = """
-uniform vec4 black;
-varying vec2 v_texCoord0;
-uniform sampler2D tex0;
-uniform sampler2D tex1;
-uniform sampler2D tex2;
-uniform sampler2D tex3;
-uniform sampler2D tex4;
-uniform sampler2D tex5;
-uniform sampler2D tex6;
-uniform sampler2D tex7;
-uniform sampler2D tex8;
-uniform sampler2D tex9;
-uniform sampler2D tex10;
-uniform sampler2D tex11;
-uniform sampler2D tex12;
-uniform sampler2D tex13;
-uniform sampler2D tex14;
-uniform sampler2D tex15;
-uniform sampler2D tex16;
-uniform sampler2D tex17;
-uniform sampler2D tex18;
-uniform sampler2D tex19;
-uniform sampler2D tex20;
-uniform sampler2D tex21;
-uniform sampler2D tex22;
-uniform sampler2D tex23;
-uniform sampler2D tex24;
-uniform sampler2D tex25;
-uniform sampler2D tex26;
-uniform sampler2D tex27;
-uniform sampler2D tex28;
-uniform sampler2D tex29;
-uniform sampler2D tex30;
-uniform sampler2D tex31;
-
-//parameters
-uniform float pitch;
-uniform float tilt;
-uniform float center;
-uniform float invView; 
-uniform float flipX; 
-uniform float flipY; 
-uniform float subp; 
-uniform int ri; //red Index
-uniform int bi; //blue Index
-uniform float tilesX; 
-uniform float tilesY;
-uniform float windowW;
-uniform float windowH;
-uniform float windowX;
-uniform float windowY;
-uniform float screenW;
-uniform float screenH;
-
-void main()
-{
-	black = vec4(0.0, 0.0, 0.0, 1.0);
-	vec4 rgb[3]; //array of three vec4s
-	vec3 nuv = vec3(v_texCoord0.xy, 0.0);
-	vec2 iUv = v_texCoord0.xy;
-	
-	sampler2D texArray[] = {
-		tex0, tex1, tex2, tex3, tex4, tex5, tex6, tex7, tex8, tex9, tex10, tex11, tex12, tex13, tex14, tex15, tex16, tex17, tex18, tex19, tex20, tex21, tex22, tex23, tex24, tex25, tex26, tex27, tex28, tex29, tex30, tex31
-	};
-	
-	gl_FragColor = black;
-	
-	//Flip UVs if necessary
-	nuv.x = (1.0 - flipX) * nuv.x + flipX * (1.0 - nuv.x);
-	nuv.y = (1.0 - flipY) * nuv.y + flipY * (1.0 - nuv.y);
-	
-	
-	for (int i = 0; i < 3; i++) {
-		nuv.z = (nuv.x + float(i) * subp + iUv.y * tilt) * pitch - center;
-		nuv.z = mod(nuv.z + ceil(abs(nuv.z)), 1.0);
-		nuv.z = (1.0 - invView) * nuv.z + invView * (1.0 - nuv.z);
-		float z = floor(nuv.z * tilesX * tilesY);
-
-		// we do not need to sample a quilt, can access the textures
-		// directly via array
-		rgb[i] = texture2D(texArray[z], nuv.xy);
-	}
-
-	//gl_FragColor = texture2D(canvas_tex, v_texCoord0);
-	gl_FragColor = vec4(rgb[0].r, rgb[1].g, rgb[2].b, 1);
-}
-"""
-
-# global variable for the shader
-program = None
-
-def create_shader_program():
-	''' create and attach a shader program made from vertex and fragment shader '''
-	global program
-	program = glCreateProgram()
-
-	shaderVert = glCreateShader(GL_VERTEX_SHADER)
-	shaderFrag = glCreateShader(GL_FRAGMENT_SHADER)
-
-	glShaderSource(shaderVert, shaderVertString)
-	glShaderSource(shaderFrag, shaderFragString)
-
-	glCompileShader(shaderVert)
-	glCompileShader(shaderFrag)
-
-	glAttachShader(program, shaderVert)
-	glAttachShader(program, shaderFrag)
-
-	glLinkProgram(program)
-	
-	#Buffer is used in BGL instead of pointers
-	success = Buffer(GL_INT, [1])
-	glGetProgramiv(program, GL_LINK_STATUS, success)
-	if (success[0] == GL_TRUE):
-		print("Shader linking successfull!")
-
-	glDeleteShader(shaderVert)
-	glDeleteShader(shaderFrag)
+# deleted shader strings (no need, dll handles shader) -k
 
 class OffScreenDraw(bpy.types.Operator):
 	bl_idname = "view3d.offscreen_draw"
@@ -255,7 +130,8 @@ class OffScreenDraw(bpy.types.Operator):
 									}
 			
 		for i in range(len(offscreens)):
-			self._update_offscreen_m(override, offscreens[i], modelview_matrices[i], projection_matrices[i])
+			# added i as argument to _update_offscreen_m -k
+			self._update_offscreen_m(override, offscreens[i], modelview_matrices[i], projection_matrices[i], i)
 
 	def _setup_matrices_from_existing_cameras(self, context, cam_parent):
 		modelview_matrices = []
@@ -378,7 +254,9 @@ class OffScreenDraw(bpy.types.Operator):
 		offscreens = list()
 		for i in range(num_offscreens):
 			try:
-				offscreen = gpu.offscreen.new(512, 256)
+				# edited this to be higher resolution, but it should be dynamic -k
+				# there might be a way we can make it toggleable between standard (512x256 4x8) and hires (819x455 5x9)
+				offscreen = gpu.offscreen.new(819, 455)
 			except Exception as e:
 				print(e)
 				offscreen = None
@@ -406,7 +284,7 @@ class OffScreenDraw(bpy.types.Operator):
 		return modelview_matrix, projection_matrix
 		
 	@staticmethod
-	def _update_offscreen_m(context, offscreen, modelview_matrix, projection_matrix):
+	def _update_offscreen_m(context, offscreen, modelview_matrix, projection_matrix, view):
 		''' render viewport into offscreen buffer using matrices '''
 		scene = bpy.context.scene
 
@@ -417,6 +295,10 @@ class OffScreenDraw(bpy.types.Operator):
 				projection_matrix,
 				modelview_matrix,
 				)
+		# added dll call to add offscreen texture to quilt -k
+		# todo: once dll is update won't have to bind texture
+		glBindTexture(GL_TEXTURE_2D, offscreen.color_texture)
+		holoplay.hp_copyViewToQuilt(ctypes.c_uint(view))
 
 	@staticmethod   		 
 	def create_image(width, height, target=GL_RGBA):
@@ -494,60 +376,12 @@ class OffScreenDraw(bpy.types.Operator):
 		glScissor(viewport[0], viewport[1], width, height)
 		
 		# the shaders are already compiled, ready to be used
-		glUseProgram(program)
+		# modified this line to use dll shader -k
+		glUseProgram(holoplay.hp_getLenticularShader())
 		
-		#sent all the parameters to the shader
-		pitchUniformLocation = glGetUniformLocation(program, "pitch")
-		glUniform1f(pitchUniformLocation, self.newPitch)
-		tiltUniformLocation = glGetUniformLocation(program, "tilt")
-		glUniform1f(tiltUniformLocation, self.newTilt)
-		centerUniformLocation = glGetUniformLocation(program, "center")
-		glUniform1f(centerUniformLocation, wm.center)
-		invViewUniformLocation = glGetUniformLocation(program, "invView")
-		glUniform1f(invViewUniformLocation, wm.invView)
-		flipXUniformLocation = glGetUniformLocation(program, "flipX")
-		glUniform1f(flipXUniformLocation, wm.flipImageX)
-		flipYUniformLocation = glGetUniformLocation(program, "flipY")
-		glUniform1f(flipXUniformLocation, wm.flipImageY)
-		subpUniformLocation = glGetUniformLocation(program, "subp")
-		glUniform1f(subpUniformLocation, self.subPixelSize)
-		riUniformLocation = glGetUniformLocation(program, "ri")
-		glUniform1f(riUniformLocation, self.redIndex)
-		biUniformLocation = glGetUniformLocation(program, "bi")
-		glUniform1f(biUniformLocation, self.blueIndex)
-		tilesXUniformLocation = glGetUniformLocation(program, "tilesX")
-		glUniform1f(tilesXUniformLocation, wm.tilesHorizontal)
-		tilesYUniformLocation = glGetUniformLocation(program, "tilesY")
-		glUniform1f(tilesYUniformLocation, wm.tilesVertical)
-		screenWUniformLocation = glGetUniformLocation(program, "screenW")
-		glUniform1f(screenWUniformLocation, wm.screenW)
-		screenHUniformLocation = glGetUniformLocation(program, "screenH")
-		glUniform1f(screenHUniformLocation, wm.screenH)
+		# deleted lines where shader values and individual textures are passed -k
+		glBindTexture(GL_TEXTURE_2D, holoplay.hp_getQuiltTexture())
 
-		# setting up all 32 textures by hand is ridiculous
-		# there must be a better way!
-		tex_names = ["tex0", "tex1", "tex2", "tex3", "tex4", "tex5", "tex6", "tex7", "tex8", "tex9", "tex10", "tex11", "tex12", "tex13", "tex14", "tex15", "tex16", "tex17", "tex18", "tex19", "tex20", "tex21", "tex22", "tex23", "tex24", "tex25", "tex26", "tex27", "tex28", "tex29", "tex30", "tex31"]
-		tex_slots = [GL_TEXTURE0, GL_TEXTURE1, GL_TEXTURE2, GL_TEXTURE3, GL_TEXTURE4, GL_TEXTURE5, GL_TEXTURE6, GL_TEXTURE7, GL_TEXTURE8, GL_TEXTURE9, GL_TEXTURE10, GL_TEXTURE11, GL_TEXTURE12, GL_TEXTURE13, GL_TEXTURE14, GL_TEXTURE15, GL_TEXTURE16, GL_TEXTURE17, GL_TEXTURE18, GL_TEXTURE19, GL_TEXTURE20, GL_TEXTURE21, GL_TEXTURE22, GL_TEXTURE23, GL_TEXTURE24, GL_TEXTURE25, GL_TEXTURE26, GL_TEXTURE27, GL_TEXTURE28, GL_TEXTURE29, GL_TEXTURE30, GL_TEXTURE31]
-		texloc = 0
-		for i, tex_name in enumerate(tex_names):
-			texLoc = glGetUniformLocation(program, tex_name)
-			glUniform1i(texLoc, i)
-
-		# checking for offscreens is a hack. TODO: refactor
-		if offscreens != None:	
-			#run the texture binding in reverse to bind texture 0 last
-			for i, tex_slot in reversed(list(enumerate(tex_slots))):
-				glActiveTexture(tex_slot)
-				glBindTexture(GL_TEXTURE_2D, offscreens[i].color_texture)
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER)
-		else:
-			for i, tex_slot in reversed(list(enumerate(tex_slots))):
-				self._LKGtexArray[i].gl_load()
-				glActiveTexture(tex_slot)
-				glBindTexture(GL_TEXTURE_2D, self._LKGtexArray[i].bindcode[0])
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER)
-
-		
 		texco = [(1, 1), (0, 1), (0, 0), (1, 0)]
 		verco = [(1.0, 1.0), (-1.0, 1.0), (-1.0, -1.0), (1.0, -1.0)]
 
@@ -599,6 +433,7 @@ class OffScreenDraw(bpy.types.Operator):
 			# get the global properties from window manager
 			wm = context.window_manager	
 
+			# note: i probably broke how this works, removing the texture array stuff -k
 			# when the user has loaded an image in the LKG tools panel, assume it is meant for viewing in the LKG as multiview
 			if context.scene.LKG_image != None:
 				num_multiview_images = int(wm.tilesHorizontal * wm.tilesVertical)
@@ -636,8 +471,11 @@ class OffScreenDraw(bpy.types.Operator):
 			#self.redIndex = (self.flipSubp == 0 ? 0 : 2)
 			#self.blueIndex = (self.flipSubp == 0 ? 2 : 0)
 			
-			# compile shaders
-			create_shader_program()
+			# removed compiling shaders line -k
+			# create_shader_program()
+
+			# initialize holoplay plugin -k
+			holoplay.hp_initialize()
 
 			# the focal distance of the active camera is used as focal plane
 			# thus it should not be 0 because then the system won't work
