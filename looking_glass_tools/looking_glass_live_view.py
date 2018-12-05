@@ -28,8 +28,8 @@ from bpy.types import AddonPreferences, PropertyGroup
 from bpy.props import FloatProperty, PointerProperty
 # additions -k
 import ctypes
-
-holoplay = ctypes.CDLL("C:\\Users\\grena\\AppData\\Roaming\\Blender Foundation\\Blender\\2.79\\scripts\\addons\\looking_glass_tools\\HoloPlayAPI")
+import os
+holoplay = ctypes.CDLL(os.path.dirname(__file__) + os.path.sep + "HoloPlayAPI.dll")
 
 # deleted shader strings (no need, dll handles shader) -k
 
