@@ -27,23 +27,15 @@ from math import *
 from mathutils import *
 from bpy.types import AddonPreferences, PropertyGroup
 from bpy.props import FloatProperty, PointerProperty
-# additions -k
 import ctypes
 
 # where is the addon loaded from?
 addonFile = os.path.realpath(__file__)
 addonDirectory = os.path.dirname(addonFile)
-
-#dllLocation = os.path.join(addonDirectory, '\\HoloPlayAPI.dll')
-
 addonDirectory =  addonDirectory + '\\HoloPlayAPI'
-
-print(addonDirectory)
-#holoplay = ctypes.CDLL(r"C:\\Users\\g\\AppData\\Roaming\\Blender Foundation\\Blender\\2.79\\scripts\\addons\\looking_glass_tools\\HoloPlayAPI")
 
 holoplay = ctypes.CDLL(addonDirectory)
 
-# deleted shader strings (no need, dll handles shader) -k
 
 class OffScreenDraw(bpy.types.Operator):
 	bl_idname = "view3d.offscreen_draw"
