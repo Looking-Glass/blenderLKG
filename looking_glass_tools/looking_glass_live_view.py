@@ -21,6 +21,7 @@ import gpu
 import json
 import subprocess
 import logging
+import os
 from bgl import *
 from math import *
 from mathutils import *
@@ -29,7 +30,18 @@ from bpy.props import FloatProperty, PointerProperty
 # additions -k
 import ctypes
 
-holoplay = ctypes.CDLL("C:\\Users\\grena\\AppData\\Roaming\\Blender Foundation\\Blender\\2.79\\scripts\\addons\\looking_glass_tools\\HoloPlayAPI")
+# where is the addon loaded from?
+addonFile = os.path.realpath(__file__)
+addonDirectory = os.path.dirname(addonFile)
+
+#dllLocation = os.path.join(addonDirectory, '\\HoloPlayAPI.dll')
+
+addonDirectory =  addonDirectory + '\\HoloPlayAPI'
+
+print(addonDirectory)
+#holoplay = ctypes.CDLL(r"C:\\Users\\g\\AppData\\Roaming\\Blender Foundation\\Blender\\2.79\\scripts\\addons\\looking_glass_tools\\HoloPlayAPI")
+
+holoplay = ctypes.CDLL(addonDirectory)
 
 # deleted shader strings (no need, dll handles shader) -k
 
@@ -132,6 +144,8 @@ class OffScreenDraw(bpy.types.Operator):
 		for i in range(len(offscreens)):
 			# added i as argument to _update_offscreen_m -k
 			self._update_offscreen_m(override, offscreens[i], modelview_matrices[i], projection_matrices[i], i)
+		
+
 
 	def _setup_matrices_from_existing_cameras(self, context, cam_parent):
 		modelview_matrices = []
@@ -202,6 +216,7 @@ class OffScreenDraw(bpy.types.Operator):
 		aspect_ratio = render.resolution_x / render.resolution_y
 
 		if scene.LKG_image != None:
+			self._send_images_to_holoplay(self._LKGtexArray)
 			offscreens = None
 			self._opengl_draw(context, offscreens, aspect_ratio, 1.0)
 		else:
@@ -299,6 +314,17 @@ class OffScreenDraw(bpy.types.Operator):
 		# todo: once dll is update won't have to bind texture
 		glBindTexture(GL_TEXTURE_2D, offscreen.color_texture)
 		holoplay.hp_copyViewToQuilt(ctypes.c_uint(view))
+
+	@staticmethod
+	def _send_images_to_holoplay(images):
+		''' parses an array of textures and sends it to the holoplay SDK '''
+		for i,image in enumerate(images):
+			print(image.name)
+			image.gl_load()
+			glActiveTexture(GL_TEXTURE0)
+			glBindTexture(GL_TEXTURE_2D, image.bindcode[0])
+			holoplay.hp_copyViewToQuilt(ctypes.c_uint(i))
+
 
 	@staticmethod   		 
 	def create_image(width, height, target=GL_RGBA):
