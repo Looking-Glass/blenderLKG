@@ -252,6 +252,7 @@ class OffScreenDraw(bpy.types.Operator):
 									'region': region,
 									'space_data': space,
 									'scene': context.scene,
+									'view_layer': context.view_layer,
 									}
 			
 		for i in range(len(offscreens)):
@@ -378,7 +379,7 @@ class OffScreenDraw(bpy.types.Operator):
 		offscreens = list()
 		for i in range(num_offscreens):
 			try:
-				offscreen = gpu.offscreen.new(512, 256)
+				offscreen = gpu.types.GPUOffScreen(512, 256)
 			except Exception as e:
 				print(e)
 				offscreen = None
@@ -410,14 +411,20 @@ class OffScreenDraw(bpy.types.Operator):
 	def _update_offscreen_m(context, offscreen, modelview_matrix, projection_matrix):
 		''' render viewport into offscreen buffer using matrices '''
 		scene = bpy.context.scene
+		context_real = bpy.context
+		view_layer = bpy.context.view_layer
 
+		print("Drawing View3D into Offscreen Buffer")
 		offscreen.draw_view3d(
 				scene,
+				context['view_layer'],
 				context['space_data'],
 				context['region'],
 				projection_matrix,
 				modelview_matrix,
 				)
+		
+		print("Finished drawing View3D into Offscreen Buffer")
 
 	@staticmethod   		 
 	def create_image(width, height, target=GL_RGBA):

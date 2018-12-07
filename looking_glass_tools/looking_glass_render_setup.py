@@ -96,7 +96,7 @@ class lkgRenderSetup(bpy.types.Operator):
 
 		#* parent it to current multi view
 		global currentMultiview
-		currentMultiview.select_set('SELECT')
+		currentMultiview.select_set(True)
 		bpy.context.view_layer.objects.active = currentMultiview
 		bpy.ops.object.parent_set(type='OBJECT', keep_transform=True)
 
