@@ -31,4 +31,10 @@ The addon requires Blender 2.79b, it does not work in Blender 2.8x yet.
 
 ## License
 
-This project is licensed under the GPL v2 License - see the [LICENSE](LICENSE) file for details.
+The blender addon portion of this project is licensed under the GPL v2 License - see the [LICENSE](LICENSE) file for details.
+
+The HoloPlayAPI is copyright Looking Glass Factory 2018, and is licensed under the following agreement:
+https://lookingglassfactory.com/holoplay-sdk-license-agreement/
+
+The HoloPlayAPI is **NOT** to be distributed with the Blender Addon! It will be included in an installation we will be distributing to Looking Glass users, which the Blender addon will make calls to.
+

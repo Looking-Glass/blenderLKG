@@ -146,6 +146,23 @@ class lkgRenderSetup(bpy.types.Operator):
 			render.views["right"].use = False
 		render.views_format = 'MULTIVIEW'
 
+	def setRenderSettings(self, context):
+		''' Set render size depending on LKG configuration. This overwrites previous settings! '''
+		wm = context.window_manager
+		render = context.scene.render
+		if wm.tilesHorizontal == 5 and wm.tilesVertical == 9:
+			render.resolution_x = 819
+			render.resolution_y = 455
+			render.pixel_aspect_x = 1.0
+			render.pixel_aspect_y = 1.125
+		elif wm.tilesHorizontal == 4 and wm.tilesVertical == 8:
+			render.resolution_x = 512
+			render.resolution_y = 256
+			render.pixel_aspect_x = 1.0
+			render.pixel_aspect_y = 1.25
+		#only make changes when one of the supported configs is set
+
+
 	def execute(self, context):
 		# TODO: find a better way, this here is tricky
 		bpy.ops.ed.undo_push()
@@ -156,7 +173,7 @@ class lkgRenderSetup(bpy.types.Operator):
 		# for a meaningful view set the middle camera active
 		numCams = len(allCameras)
 		context.scene.camera = allCameras[int(floor(numCams/2))]
-
+		self.setRenderSettings(context)
 		return {'FINISHED'}
 
 def register():
