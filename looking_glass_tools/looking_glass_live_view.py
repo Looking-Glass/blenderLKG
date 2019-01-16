@@ -30,11 +30,12 @@ from bpy.props import FloatProperty, PointerProperty
 import ctypes
 
 # where is the addon loaded from?
-addonFile = os.path.realpath(__file__)
-addonDirectory = os.path.dirname(addonFile)
-addonDirectory =  addonDirectory + '\\HoloPlayAPI'
+# addonFile = os.path.realpath(__file__)
+# addonDirectory = os.path.dirname(addonFile)
+# addonDirectory =  addonDirectory + '\\HoloPlayAPI'
+# holoplay = ctypes.CDLL(addonDirectory)
 
-holoplay = ctypes.CDLL(addonDirectory)
+holoplay = ctypes.CDLL(HoloPlayAPI)
 
 
 class OffScreenDraw(bpy.types.Operator):
