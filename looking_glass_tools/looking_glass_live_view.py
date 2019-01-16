@@ -400,11 +400,8 @@ class OffScreenDraw(bpy.types.Operator):
 		glViewport(viewport[0], viewport[1], width, height)
 		glScissor(viewport[0], viewport[1], width, height)
 		
-		# the shaders are already compiled, ready to be used
 		# modified this line to use dll shader -k
 		glUseProgram(holoplay.hp_getLenticularShader())
-		
-		# deleted lines where shader values and individual textures are passed -k
 		glBindTexture(GL_TEXTURE_2D, holoplay.hp_getQuiltTexture())
 
 		texco = [(1, 1), (0, 1), (0, 0), (1, 0)]
@@ -458,7 +455,6 @@ class OffScreenDraw(bpy.types.Operator):
 			# get the global properties from window manager
 			wm = context.window_manager	
 
-			# note: i probably broke how this works, removing the texture array stuff -k
 			# when the user has loaded an image in the LKG tools panel, assume it is meant for viewing in the LKG as multiview
 			if context.scene.LKG_image != None:
 				num_multiview_images = int(wm.tilesHorizontal * wm.tilesVertical)
@@ -495,9 +491,6 @@ class OffScreenDraw(bpy.types.Operator):
 				self.blueIndex = 0
 			#self.redIndex = (self.flipSubp == 0 ? 0 : 2)
 			#self.blueIndex = (self.flipSubp == 0 ? 2 : 0)
-			
-			# removed compiling shaders line -k
-			# create_shader_program()
 
 			# initialize holoplay plugin -k
 			holoplay.hp_initialize()
@@ -513,9 +506,12 @@ class OffScreenDraw(bpy.types.Operator):
 			except:
 				print("Need an active camera in the scene")
 
-			# change the render aspect ratio so the view in the looking glass does not get deformed
-			aspect_ratio = wm.screenW / wm.screenH
-			context.scene.render.resolution_x = context.scene.render.resolution_y * aspect_ratio
+			#check whether multiview render setup has been created
+			cam_parent = bpy.data.objects.get("Multiview")
+			if cam_parent is None:
+				# change the render aspect ratio so the view in the looking glass does not get deformed
+				aspect_ratio = wm.screenW / wm.screenH
+				context.scene.render.resolution_x = context.scene.render.resolution_y * aspect_ratio
 
 			context.window_manager.modal_handler_add(self)
 			return {'RUNNING_MODAL'}
