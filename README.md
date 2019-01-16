@@ -4,6 +4,7 @@ Blender SKD for the Looking Glass. Features live-display of the camera view in t
 ### Prerequisites
 
 The addon requires Blender 2.79b, it does not work in Blender 2.8x yet.
+
 It also requires the HoloPlay C API to be installed, which can be downloaded here: http://static-files.lookingglassfactory.com.s3.amazonaws.com/HoloPlayCAPI/Install%20HoloPlayCAPI.exe (must not uncheck the Add to PATH option, as the Blender plugin uses this)
 
 ### Installing
