@@ -71,6 +71,13 @@ class lkgRenderSetup(bpy.types.Operator):
 
 		self.setParentTrans(multiviewDirection, currentMultiview)
 
+	def get_vertical_fov_from_camera(self, cam):
+		''' returns the vertical field of view of the camera '''
+		wm = bpy.context.window_manager
+		render = bpy.context.scene.render
+		projection_matrix = cam.calc_matrix_camera(render.resolution_x, render.resolution_y, render.pixel_aspect_x, render.pixel_aspect_y)
+		fov = 2.0*atan( 1.0/projection_matrix[1][1] )
+		return fov
 
 
 	def makeCamera(self, i):
@@ -79,10 +86,10 @@ class lkgRenderSetup(bpy.types.Operator):
 		wm = bpy.context.window_manager
 		numViews = wm.tilesHorizontal * wm.tilesVertical
 		viewCone = wm.viewCone
-		#why a field of view of 13.5 degrees?
+		# the fov of the Blender camera is relative to the broader side
+		# at an aspect ratio of 16:10 a fov of 14° translates to ~22.23 degrees
 		#fov = 13.5
-		fov = 35.5
-
+		fov = 22
 		bpy.ops.object.camera_add(
 			view_align=False,
 			enter_editmode=False,
@@ -92,7 +99,8 @@ class lkgRenderSetup(bpy.types.Operator):
 		cam = bpy.context.active_object
 		cam.name = 'cam.' + str(i).zfill(2)
 		cam.data.lens_unit = 'FOV'
-		cam.data.angle = radians(fov)
+		fov_rad = radians(fov)
+		cam.data.angle = fov_rad
 
 		#* parent it to current multi view
 		global currentMultiview
@@ -101,7 +109,7 @@ class lkgRenderSetup(bpy.types.Operator):
 		bpy.ops.object.parent_set(type='OBJECT', keep_transform=True)
 
 		# cam distance
-		camLocZ = currentMultiview.scale[0] / tan(0.5 * cam.data.angle)
+		camLocZ = currentMultiview.scale[0] / tan(0.5 * fov_rad)
 		cam.location[2] = camLocZ
 
 		# cam x pos
@@ -111,8 +119,14 @@ class lkgRenderSetup(bpy.types.Operator):
 		self.log.info("Camera Z location: %f" % cam.location[2])
 		cam.location[0] = camLocX
 
-		#* driver for shift x
+		# shift x
 		cam.data.shift_x = (-0.5) * cam.location.x
+
+		# clipping relative to the MultiView object bounds
+		# clip delta is to get rid of most of the Multiview object in the LKG
+		clip_delta = 0.01
+		cam.data.clip_start = camLocZ - 1.0 + clip_delta
+		cam.data.clip_end = camLocZ + 1.0 - clip_delta
 
 		#* set up view
 		bpy.ops.scene.render_view_add()
