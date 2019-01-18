@@ -35,7 +35,7 @@ import ctypes
 # addonDirectory =  addonDirectory + '\\HoloPlayAPI'
 # holoplay = ctypes.CDLL(addonDirectory)
 
-holoplay = ctypes.CDLL(HoloPlayAPI)
+holoplay = ctypes.CDLL("HoloPlayAPI")
 
 
 class OffScreenDraw(bpy.types.Operator):
@@ -395,7 +395,7 @@ class OffScreenDraw(bpy.types.Operator):
 		glScissor(viewport[0], viewport[1], width, height)
 		
 		# modified this line to use dll shader -k
-		glUseProgram(holoplay.hp_getLenticularShader())
+		glUseProgram(holoplay.hp_getLightfieldShader())
 		glBindTexture(GL_TEXTURE_2D, holoplay.hp_getQuiltTexture())
 
 		texco = [(1, 1), (0, 1), (0, 0), (1, 0)]
