@@ -473,18 +473,6 @@ class OffScreenDraw(bpy.types.Operator):
 				context.area.tag_redraw()
 			
 			scn = context.scene
-			#some parameters for the shader need to be computed once
-			self.newPitch = wm.pitch * (wm.screenW / wm.DPI) * cos(atan(1 / wm.slope))
-			self.newTilt = wm.screenH / (wm.screenW * wm.slope)
-			self.subPixelSize = 1 / (wm.screenW * 3)
-			if wm.flipSubp == 0:
-				self.redIndex = 0
-				self.blueIndex = 2
-			else:
-				self.redIndex = 2
-				self.blueIndex = 0
-			#self.redIndex = (self.flipSubp == 0 ? 0 : 2)
-			#self.blueIndex = (self.flipSubp == 0 ? 2 : 0)
 
 			# initialize holoplay plugin -k
 			holoplay.hp_initialize()
