@@ -22,7 +22,7 @@ It also requires the HoloPlay C API to be installed, which can be [downloaded he
 
 * The main UI can be found in the _Tool Shelf → Looking Glass Tab_.
 * **Create Render Setup** will place 32 (invisible) cameras parented to an empty with cube representation into the scene. The cube determines what is visible inside the Looking Glass after render. The cameras are parented to the cube so move, rotate and scale the cube to place the cameras in the scene. The setup created uses the Blender multiview system.
-* **Create LKG Window** opens up a detached window with image editor ready. In the image editor use the new menu item _View → Looking Glass Live View_ to start the live display of the viewport camera. Next place the window in the Looking Glass and use ALT + F11 to make it fullscreen.
+* **Create LKG Window** opens up a detached window with image editor ready. In the image editor use the new menu item _View → Looking Glass Live View_ to start the live display of the viewport camera. Minimize the bar at the bottom so that the entirety of the window is just the Looking Glass preview, otherwise the center will be off when going fullscreen. Next place the window in the Looking Glass and use ALT + F11 to make it fullscreen.
 * **LKG image to view** You can select an image rendered for the LKG in Blender here. Only images that have been saved to disk as multiview sequence work. The LKG window will show the image as long as one is selected in this field but you will have to run the _View → Looking Glass Live View_ command again.
 
 
