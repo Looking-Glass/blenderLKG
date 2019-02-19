@@ -27,6 +27,25 @@ from math import *
 from mathutils import *
 from bpy.types import AddonPreferences, PropertyGroup
 from bpy.props import FloatProperty, PointerProperty
+from bpy.app.handlers import persistent
+
+@persistent
+def fix_clipping_planes_pre(self):
+	''' Fixed weird behaviour of Blender when rendering by adjusting the clipping distances of the LKG cameras by the local scale of the Multiview object '''
+	currentMultiview = bpy.data.objects.get("Multiview")
+	for ob in currentMultiview.children:
+		scale_factor = currentMultiview.matrix_local.to_scale().z
+		ob.data.clip_start *= scale_factor
+		ob.data.clip_end *= scale_factor
+
+@persistent
+def fix_clipping_planes_post(self):
+	''' Reverse the effects of fix_clipping_planes_post '''
+	currentMultiview = bpy.data.objects.get("Multiview")
+	for ob in currentMultiview.children:
+		scale_factor = currentMultiview.matrix_local.to_scale().z
+		ob.data.clip_start /= scale_factor
+		ob.data.clip_end /= scale_factor
 
 class lkgRenderSetup(bpy.types.Operator):
 	bl_idname = "lookingglass.render_setup"
@@ -242,6 +261,8 @@ class lkgRenderSetup(bpy.types.Operator):
 		numCams = len(allCameras)
 		context.scene.camera = allCameras[int(floor(numCams/2))]
 		self.setRenderSettings(context)
+		bpy.app.handlers.render_pre.append(fix_clipping_planes_pre)
+		bpy.app.handlers.render_post.append(fix_clipping_planes_post)
 		return {'FINISHED'}
 
 def register():
