@@ -154,7 +154,8 @@ class lkgRenderSetup(bpy.types.Operator):
 		global currentMultiview
 		currentMultiview.select = True
 		bpy.context.scene.objects.active = currentMultiview
-		bpy.ops.object.parent_set(type='OBJECT', keep_transform=True)
+		#bpy.ops.object.parent_set(type='OBJECT', keep_transform=True)
+		self.setParentTrans(cam, currentMultiview)
 
 		# cam distance
 		#camLocZ = currentMultiview.scale[0] / tan(0.5 * fov_rad)
