@@ -18,6 +18,7 @@
 
 import bpy
 import gpu
+import bmesh
 import json
 import subprocess
 import logging
@@ -26,6 +27,25 @@ from math import *
 from mathutils import *
 from bpy.types import AddonPreferences, PropertyGroup
 from bpy.props import FloatProperty, PointerProperty
+from bpy.app.handlers import persistent
+
+@persistent
+def fix_clipping_planes_pre(self):
+	''' Fixed weird behaviour of Blender when rendering by adjusting the clipping distances of the LKG cameras by the local scale of the Multiview object '''
+	currentMultiview = bpy.data.objects.get("Multiview")
+	for ob in currentMultiview.children:
+		scale_factor = currentMultiview.matrix_local.to_scale().z
+		ob.data.clip_start *= scale_factor
+		ob.data.clip_end *= scale_factor
+
+@persistent
+def fix_clipping_planes_post(self):
+	''' Reverse the effects of fix_clipping_planes_post '''
+	currentMultiview = bpy.data.objects.get("Multiview")
+	for ob in currentMultiview.children:
+		scale_factor = currentMultiview.matrix_local.to_scale().z
+		ob.data.clip_start /= scale_factor
+		ob.data.clip_end /= scale_factor
 
 class lkgRenderSetup(bpy.types.Operator):
 	bl_idname = "lookingglass.render_setup"
@@ -34,6 +54,7 @@ class lkgRenderSetup(bpy.types.Operator):
 	bl_options = {'REGISTER', 'UNDO'}
 
 	currentMultiview = None
+	fov = None
 
 	log = logging.getLogger('bpy.ops.%s' % bl_idname)
 	log.setLevel('DEBUG')
@@ -49,47 +70,93 @@ class lkgRenderSetup(bpy.types.Operator):
 		''' Create a parent object for the multiview cameras that also indicates the view space of the LKG '''
 		self.log.info("Making Multiview")
 
+		# cube of dimensions 1-1-1, front and back stored separately
+		verts_front = [(-1.0,1.0,1.0),(1.0,1.0,1.0),(1.0,-1.0,1.0),(-1.0,-1.0,1.0)]
+		verts_back = [(-1.0,1.0,-1.0),(1.0,1.0,-1.0),(1.0,-1.0,-1.0),(-1.0,-1.0,-1.0)]
+
 		scn = context.scene
 		global currentMultiview
+		global fov
 
-		currentMultiview = bpy.data.objects.new("Multiview", None)
+		# Create mesh 
+		me = bpy.data.meshes.new('Multiview') 
+
+		# Create object
+		currentMultiview = bpy.data.objects.new("Multiview", me)
+		currentMultiview.show_name = True
 		scn.collection.objects.link(currentMultiview)
-		currentMultiview.empty_display_type = 'CUBE'
+
+		# Get a BMesh representation
+		bm = bmesh.new()   # create an empty BMesh
+		
+		bm_verts_front = []
+		bm_verts_back = []
+		bm_verts = []				
+
+		for v in verts_front:
+			bm_vert = bm.verts.new(v)
+			bm_verts_front.append(bm_vert)
+			bm_verts.append(bm_vert)
+		for v in verts_back:
+			bm_vert = bm.verts.new(v)
+			bm_verts_back.append(bm_vert)
+			bm_verts.append(bm_vert)
+
+		for i, v in enumerate(bm_verts_front):
+			j = (i+1)%len(bm_verts_front)
+			bm.edges.new( (bm_verts_front[i], bm_verts_front[j]) )
+			
+		for i, v in enumerate(bm_verts_back):
+			j = (i+1)%len(bm_verts_back)
+			bm.edges.new( (bm_verts_back[i], bm_verts_back[j]) )
+			# hacky, saves one extra loop
+			bm.edges.new( (bm_verts_front[i], bm_verts_back[i]) )
+		
+		dist=self.calculate_camera_distance_z(fov)
+		# hardcoded - refactor!
+		# the result includes a margin around the Multiview container object
+		dist_front = dist - 1.5
+		dist_back = dist + 0.0
+		
+		scale_factor_front = tan(fov) * dist_front
+		scale_factor_back = tan(fov) * dist_back
+		
+		bmesh.ops.scale(bm, vec=(scale_factor_front, scale_factor_front, 1.0), space=currentMultiview.matrix_local, verts=bm_verts_front)
+		bmesh.ops.scale(bm, vec=(scale_factor_back, scale_factor_back, 1.0), space=currentMultiview.matrix_local, verts=bm_verts_back)
 
 		# the aspect ratio should match the one of the LKG device
 		wm = bpy.context.window_manager
 		aspectRatio = wm.screenH / wm.screenW
-		currentMultiview.scale.y = currentMultiview.scale.x * aspectRatio
 
-		# adding another empty as cone to indicate direction
-		multiviewDirection = bpy.data.objects.new("MultiviewDirection", None)
+		bmesh.ops.scale(bm, vec=(1.0, aspectRatio, 1.0), space=currentMultiview.matrix_local, verts=bm_verts_front)
+		bmesh.ops.scale(bm, vec=(1.0, aspectRatio, 1.0), space=currentMultiview.matrix_local, verts=bm_verts_back)
+
+		# Finish up, write the bmesh back to the mesh
+		bm.to_mesh(me)
 		
-		scn.collection.objects.link(multiviewDirection)
-		multiviewDirection.location = (0,0,1.0)
-		multiviewDirection.rotation_euler = (radians(90.0), 0, 0)
-		multiviewDirection.empty_display_type = 'CONE'
-
-		self.setParentTrans(multiviewDirection, currentMultiview)
-
 	def get_vertical_fov_from_camera(self, cam):
 		''' returns the vertical field of view of the camera '''
 		wm = bpy.context.window_manager
 		render = bpy.context.scene.render
 		projection_matrix = cam.calc_matrix_camera(render.resolution_x, render.resolution_y, render.pixel_aspect_x, render.pixel_aspect_y)
-		fov = 2.0*atan( 1.0/projection_matrix[1][1] )
-		return fov
+		fov_vertical = 2.0*atan( 1.0/projection_matrix[1][1] )
+		return fov_vertical
 
-
+	@staticmethod
+	def calculate_camera_distance_z(fov):
+		#global fov
+		global currentMultiview
+		camLocZ = currentMultiview.scale[0] / tan(0.5 * radians(fov))
+		return camLocZ
+	
 	def makeCamera(self, i):
 		''' Create Camera '''
 		self.log.info("Creating Camera")
+		global fov
 		wm = bpy.context.window_manager
 		numViews = wm.tilesHorizontal * wm.tilesVertical
 		viewCone = wm.viewCone
-		# the fov of the Blender camera is relative to the broader side
-		# at an aspect ratio of 16:10 a fov of 14° translates to ~22.23 degrees
-		#fov = 13.5
-		fov = 22
+		
 		bpy.ops.object.camera_add(
 			view_align=False,
 			enter_editmode=False,
@@ -106,10 +173,11 @@ class lkgRenderSetup(bpy.types.Operator):
 		global currentMultiview
 		currentMultiview.select_set(True)
 		bpy.context.view_layer.objects.active = currentMultiview
-		bpy.ops.object.parent_set(type='OBJECT', keep_transform=True)
+		self.setParentTrans(cam, currentMultiview)
 
 		# cam distance
-		camLocZ = currentMultiview.scale[0] / tan(0.5 * fov_rad)
+		#camLocZ = currentMultiview.scale[0] / tan(0.5 * fov_rad)
+		camLocZ = self.calculate_camera_distance_z(fov)
 		cam.location[2] = camLocZ
 
 		# cam x pos
@@ -178,6 +246,10 @@ class lkgRenderSetup(bpy.types.Operator):
 
 
 	def execute(self, context):
+		# the fov of the Blender camera is relative to the broader side
+		# at an aspect ratio of 16:10 a fov of 14° translates to ~22.23 degrees
+		global fov
+		fov = 22.23
 		# TODO: find a better way, this here is tricky
 		bpy.ops.ed.undo_push()
 		self.setupMultiView()
@@ -188,6 +260,8 @@ class lkgRenderSetup(bpy.types.Operator):
 		numCams = len(allCameras)
 		context.scene.camera = allCameras[int(floor(numCams/2))]
 		self.setRenderSettings(context)
+		bpy.app.handlers.render_pre.append(fix_clipping_planes_pre)
+		bpy.app.handlers.render_post.append(fix_clipping_planes_post)
 		return {'FINISHED'}
 
 def register():

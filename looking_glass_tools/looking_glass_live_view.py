@@ -28,13 +28,9 @@ from mathutils import *
 from bpy.types import AddonPreferences, PropertyGroup
 from bpy.props import FloatProperty, PointerProperty
 import ctypes
+from gpu_extras.presets import draw_texture_2d
 
-# where is the addon loaded from?
-# addonFile = os.path.realpath(__file__)
-# addonDirectory = os.path.dirname(addonFile)
-# addonDirectory =  addonDirectory + '\\HoloPlayAPI'
-# holoplay = ctypes.CDLL(addonDirectory)
-
+# only works when DLL is correctly installed
 holoplay = ctypes.CDLL("HoloPlayAPI")
 
 
@@ -172,7 +168,7 @@ class OffScreenDraw(bpy.types.Operator):
 			modelview_matrix, projection_matrix = self._setup_matrices_from_camera(context, camera_active)
 			
 			# compute the field of view from projection matrix directly
-			# because focal length fov in Cycles is a disc
+			# because focal length fov in Cycles is relative to the longer side of the view rectangle
 			view_cone = 2.0*atan( 1.0/projection_matrix[1][1] ) 	   
 			view_angles = self.compute_view_angles(view_cone, total_views)
 			
@@ -325,38 +321,6 @@ class OffScreenDraw(bpy.types.Operator):
 			glBindTexture(GL_TEXTURE_2D, image.bindcode[0])
 			holoplay.hp_copyViewToQuilt(ctypes.c_uint(i))
 
-
-	@staticmethod   		 
-	def create_image(width, height, target=GL_RGBA):
-		"""create an empty image, dimensions pow2"""
-		if target == GL_RGBA:
-			target, internal_format, dimension  = GL_RGBA, GL_RGB, 3
-		else:
-			target, internal_format, dimension = GL_DEPTH_COMPONENT32, GL_DEPTH_COMPONENT, 1
-
-		null_buffer = Buffer(GL_BYTE, [(width + 1) * (height + 1) * dimension])
-
-		id_buf = Buffer(GL_INT, 1)
-		glGenTextures(1, id_buf)
-
-		tex_id = id_buf.to_list()[0]
-		glBindTexture(GL_TEXTURE_2D, tex_id)
-
-		glTexImage2D(GL_TEXTURE_2D, 0, target, width, height, 0, internal_format, GL_UNSIGNED_BYTE, null_buffer)
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-
-		if target == GL_DEPTH_COMPONENT32:
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_NONE)
-
-		glCopyTexImage2D(GL_TEXTURE_2D, 0, target, 0, 0, width, height, 0)
-
-		glBindTexture(GL_TEXTURE_2D, 0)
-
-		del null_buffer
-		
-		return tex_id
-	
 	@staticmethod
 	def update_image(tex_id, target=GL_RGBA, texture=GL_TEXTURE0):
 		"""copy the current buffer to the image"""
@@ -374,7 +338,29 @@ class OffScreenDraw(bpy.types.Operator):
 		if glIsTexture(tex_id):
 			glDeleteTextures(1, id_buf)
 
+	
 	def _opengl_draw(self, context, offscreens, aspect_ratio, scale):
+		''' OpenGL code to draw a rectangle in a window '''
+		scn = context.scene
+		wm = context.window_manager
+		width = floor(wm.screenW)
+		height = floor(wm.screenH)
+
+		#view_matrix = scn.camera.matrix_world.inverted()
+
+		#projection_matrix = scn.camera.calc_matrix_camera(
+		#	context.depsgraph, x=WIDTH, y=HEIGHT)
+
+		#update_offscreen_context_override(context, offscreen, view_matrix, projection_matrix)
+		#update_offscreen_regular(context, offscreen, view_matrix, projection_matrix)
+		print("OpenGL Draw")
+		glDisable(GL_DEPTH_TEST)
+		glUseProgram(holoplay.hp_getLightfieldShader())
+		#draw_texture_2d(holoplay.hp_getQuiltTexture(), (0, 0), width, height)
+		draw_texture_2d(offscreens[0].color_texture, (0, 0), width, height)
+		glUseProgram(0)
+
+	def _opengl_draw_(self, context, offscreens, aspect_ratio, scale):
 		''' OpenGL code to draw a rectangle in a window '''
 
 		scn = context.scene
@@ -383,11 +369,11 @@ class OffScreenDraw(bpy.types.Operator):
 		glDisable(GL_DEPTH_TEST)	   
 
 		# view setup
-		glMatrixMode(GL_PROJECTION)
-		glPushMatrix()
-		glLoadIdentity()
+		#glMatrixMode(GL_PROJECTION)
+		#glPushMatrix()
+		#glLoadIdentity()
 
-		glOrtho(-1, 1, -1, 1, -15, 15)
+		#glOrtho(-1, 1, -1, 1, -15, 15)
 
 		act_tex = Buffer(GL_INT, 1)
 		glGetIntegerv(GL_TEXTURE_2D, act_tex)
@@ -410,13 +396,13 @@ class OffScreenDraw(bpy.types.Operator):
 
 		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
 
-		glColor4f(1.0, 1.0, 1.0, 1.0)   	
+		#glColor4f(1.0, 1.0, 1.0, 1.0)   	
 
-		glBegin(GL_QUADS)
-		for i in range(4):
-			glTexCoord3f(texco[i][0], texco[i][1], 0.0)
-			glVertex2f(verco[i][0], verco[i][1])
-		glEnd() 	  
+		#glBegin(GL_QUADS)
+		#for i in range(4):
+		#	glTexCoord3f(texco[i][0], texco[i][1], 0.0)
+	#		glVertex2f(verco[i][0], verco[i][1])
+		#glEnd() 	  
 
 		# restoring settings
 		glBindTexture(GL_TEXTURE_2D, act_tex[0])
@@ -424,11 +410,11 @@ class OffScreenDraw(bpy.types.Operator):
 		glDisable(GL_TEXTURE_2D)
 
 		# reset view
-		glMatrixMode(GL_PROJECTION)
-		glPopMatrix()
+		#glMatrixMode(GL_PROJECTION)
+		#glPopMatrix()
 
-		glMatrixMode(GL_MODELVIEW)
-		glPopMatrix()
+		#glMatrixMode(GL_MODELVIEW)
+		#glPopMatrix()
 
 		glViewport(viewport[0], viewport[1], viewport[2], viewport[3])
 		glScissor(viewport[0], viewport[1], viewport[2], viewport[3])
@@ -520,33 +506,6 @@ class looking_glass_window_setup(bpy.types.Operator):
 	bl_description = "Creates a new window of type image editor that can be used in the looking glass display."
 	bl_options = {'REGISTER', 'UNDO'}
 
-	@staticmethod
-	def load_calibration():
-		user_preferences = bpy.context.user_preferences
-		filepath = user_preferences.addons["looking_glass_tools"].preferences.filepath
-		print(filepath)
-		try:
-			config_json_raw = subprocess.run([filepath], stdout=subprocess.PIPE)
-			config_json_text = config_json_raw.stdout.decode('UTF-8')
-			config_json = json.loads(config_json_text)
-			print("Loading of config success, center: " + str(config_json['center']['value']))
-			wm = bpy.context.window_manager
-			wm.pitch = float(config_json['pitch']['value'])
-			wm.slope = float(config_json['slope']['value'])
-			wm.center = float(config_json['center']['value'])
-			wm.invView = float(config_json['invView']['value'])
-			wm.DPI = float(config_json['DPI']['value'])
-			wm.screenW = float(config_json['screenW']['value'])
-			wm.screenH = float(config_json['screenH']['value'])
-			wm.flipImageX = float(config_json['flipImageX']['value'])
-			wm.flipImageY = float(config_json['flipImageY']['value'])
-			wm.flipSubp = float(config_json['flipSubp']['value'])
-
-		except:
-			print("Loading of config failed. Check file path of config utility in the addon preferences.")
-
-
-
 	def execute(self, context):
 		# Call user prefs window
 		bpy.ops.screen.area_dupli('INVOKE_DEFAULT')
@@ -555,8 +514,6 @@ class looking_glass_window_setup(bpy.types.Operator):
 		area = bpy.context.window_manager.windows[-1].screen.areas[0]
 		area.type = 'IMAGE_EDITOR'
 		OffScreenDraw.area = area
-		self.load_calibration()
-		print("Loaded Calibration")
 		return {'FINISHED'}
 
 def menu_func(self, context):
