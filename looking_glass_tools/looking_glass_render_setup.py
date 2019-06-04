@@ -158,8 +158,8 @@ class lkgRenderSetup(bpy.types.Operator):
 		viewCone = wm.viewCone
 		
 		bpy.ops.object.camera_add(
-			view_align=False,
 			enter_editmode=False,
+			align='WORLD',
 			location=(0, 0, 0),
 			rotation=(0,0,0)
 		)

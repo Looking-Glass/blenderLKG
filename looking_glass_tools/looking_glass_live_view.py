@@ -18,27 +18,28 @@
 
 import bpy
 import gpu
-import json
-import subprocess
+#import json
+#import subprocess
 import logging
 import os
+import ctypes
 from bgl import *
 from math import *
 from mathutils import *
 from bpy.types import AddonPreferences, PropertyGroup
 from bpy.props import FloatProperty, PointerProperty
-import ctypes
+from sys import getsizeof
 from gpu_extras.presets import draw_texture_2d
 
 # only works when DLL is correctly installed
-holoplay = ctypes.CDLL("HoloPlayAPI")
-
+#holoplay = ctypes.CDLL("HoloPlayAPI")
+# for testing purposes of the latest lib version the path to HoloPlay is hardcoded
+holoplay = ctypes.CDLL("c:\\tmp\\HoloPlayAPI")
 
 class OffScreenDraw(bpy.types.Operator):
 	bl_idname = "view3d.offscreen_draw"
 	bl_label = "Looking Glass Live View"
 
-	_handle_calc = None
 	_handle_draw = None
 	_handle_draw_3dview = None
 	is_enabled = False
@@ -47,13 +48,6 @@ class OffScreenDraw(bpy.types.Operator):
 	
 	# store the area from where the operator is invoked
 	area = None
-
-	#dummy vars for one-time computations
-	newPitch = 0.0
-	newTilt = 0.0
-	subPixelSize = 0.0
-	redIndex = 0
-	blueIndex = 0
 	
 	@staticmethod
 	def compute_view_angles(view_cone, total_views):
@@ -191,14 +185,14 @@ class OffScreenDraw(bpy.types.Operator):
 		offscreens = self._setup_offscreens(context, total_views)
 		
 		# render the scene total_views times from different angles and store the results in offscreen objects
-		self.update_offscreens(self, context, offscreens, modelview_matrices, projection_matrices)		
+		#self.update_offscreens(self, context, offscreens, modelview_matrices, projection_matrices)		
 		
 
 		self._opengl_draw(context, offscreens, aspect_ratio, 1.0)
 
 	@staticmethod
 	def draw_callback_viewer(self, context):
-		''' Manges the draw handler for the multiview image viewer '''
+		''' Manages the draw handler for the multiview image viewer '''
 		scene = context.scene
 		render = scene.render
 
@@ -206,9 +200,9 @@ class OffScreenDraw(bpy.types.Operator):
 		aspect_ratio = render.resolution_x / render.resolution_y
 
 		if scene.LKG_image != None:
-			self._send_images_to_holoplay(self._LKGtexArray)
 			offscreens = None
-			self._opengl_draw(context, offscreens, aspect_ratio, 1.0)
+			#self._opengl_draw(context, offscreens, aspect_ratio, 1.0)
+			self.draw(context)
 		else:
 			print("No image selected to draw in the LKG, removing viewer")
 			self.cancel(context)
@@ -280,7 +274,7 @@ class OffScreenDraw(bpy.types.Operator):
 		
 		modelview_matrix = camera.matrix_world.inverted()
 		projection_matrix = camera.calc_matrix_camera(
-				context.depsgraph,
+				context.evaluated_depsgraph_get(),
 				x=render.resolution_x,
 				y=render.resolution_y,
 				scale_x=render.pixel_aspect_x,
@@ -296,7 +290,7 @@ class OffScreenDraw(bpy.types.Operator):
 		context_real = bpy.context
 		view_layer = bpy.context.view_layer
 
-		print("Drawing View3D into Offscreen Buffer")
+		#print("Drawing View3D into Offscreen Buffer")
 		offscreen.draw_view3d(
 				scene,
 				context['view_layer'],
@@ -308,8 +302,11 @@ class OffScreenDraw(bpy.types.Operator):
 				
 		# added dll call to add offscreen texture to quilt -k
 		# todo: once dll is update won't have to bind texture
+		print("_update_offscreen_m")
 		glBindTexture(GL_TEXTURE_2D, offscreen.color_texture)
+		print(glGetError())
 		holoplay.hp_copyViewToQuilt(ctypes.c_uint(view))
+		print(glGetError())
 
 	@staticmethod
 	def _send_images_to_holoplay(images):
@@ -318,7 +315,7 @@ class OffScreenDraw(bpy.types.Operator):
 			print(image.name)
 			image.gl_load()
 			glActiveTexture(GL_TEXTURE0)
-			glBindTexture(GL_TEXTURE_2D, image.bindcode[0])
+			glBindTexture(GL_TEXTURE_2D, image.bindcode)
 			holoplay.hp_copyViewToQuilt(ctypes.c_uint(i))
 
 	@staticmethod
@@ -338,87 +335,55 @@ class OffScreenDraw(bpy.types.Operator):
 		if glIsTexture(tex_id):
 			glDeleteTextures(1, id_buf)
 
-	
-	def _opengl_draw(self, context, offscreens, aspect_ratio, scale):
-		''' OpenGL code to draw a rectangle in a window '''
-		scn = context.scene
-		wm = context.window_manager
-		width = floor(wm.screenW)
-		height = floor(wm.screenH)
-
-		#view_matrix = scn.camera.matrix_world.inverted()
-
-		#projection_matrix = scn.camera.calc_matrix_camera(
-		#	context.depsgraph, x=WIDTH, y=HEIGHT)
-
-		#update_offscreen_context_override(context, offscreen, view_matrix, projection_matrix)
-		#update_offscreen_regular(context, offscreen, view_matrix, projection_matrix)
-		print("OpenGL Draw")
-		glDisable(GL_DEPTH_TEST)
-		glUseProgram(holoplay.hp_getLightfieldShader())
-		#draw_texture_2d(holoplay.hp_getQuiltTexture(), (0, 0), width, height)
-		draw_texture_2d(offscreens[0].color_texture, (0, 0), width, height)
-		glUseProgram(0)
-
-	def _opengl_draw_(self, context, offscreens, aspect_ratio, scale):
-		''' OpenGL code to draw a rectangle in a window '''
-
-		scn = context.scene
-		wm = context.window_manager
-
-		glDisable(GL_DEPTH_TEST)	   
-
-		# view setup
-		#glMatrixMode(GL_PROJECTION)
-		#glPushMatrix()
-		#glLoadIdentity()
-
-		#glOrtho(-1, 1, -1, 1, -15, 15)
-
-		act_tex = Buffer(GL_INT, 1)
-		glGetIntegerv(GL_TEXTURE_2D, act_tex)
-
-		viewport = Buffer(GL_INT, 4)
-		glGetIntegerv(GL_VIEWPORT, viewport)
-
-		width = floor(wm.screenW)
-		height = floor(wm.screenH)
+	def draw(self, context):
+		''' Draws a rectangle '''
+		context = bpy.context
+		scene = context.scene
 		
-		glViewport(viewport[0], viewport[1], width, height)
-		glScissor(viewport[0], viewport[1], width, height)
+					#positions  	#colors 		 #texture coords
+		vertices = [1.0,  1.0, 0.0,   1.0, 0.0, 0.0,   1.0, 1.0,   # top right
+					1.0, -1.0, 0.0,   0.0, 1.0, 0.0,   1.0, 0.0,   # bottom right
+					-1.0, -1.0, 0.0,   0.0, 0.0, 1.0,   0.0, 0.0,   # bottom left
+					-1.0,  1.0, 0.0,   1.0, 1.0, 0.0,   0.0, 1.0]   # top left 
 		
-		# modified this line to use dll shader -k
+		indices = [0, 1, 3, # first triangle
+					1, 2, 3] # second triangle
+		
+		verco_buf = Buffer(GL_FLOAT, len(vertices), vertices)
+		indices_buf = Buffer(GL_INT, len(indices), indices)
+		
+		id_buf = Buffer(GL_INT, 1)
+		vao_buf = Buffer(GL_INT, 1)
+		ebo_buf = Buffer(GL_INT, 1)
+		glGenBuffers(1, id_buf)
+		glGenBuffers(1, ebo_buf)
+		glGenVertexArrays(1, vao_buf)
+		# bind the Vertex Array Object first, then bind and set vertex buffer(s), and then configure vertex attributes(s).
+		glBindVertexArray(vao_buf[0])
+
+		glBindBuffer(GL_ARRAY_BUFFER, id_buf[0])
+		glBufferData(GL_ARRAY_BUFFER, 128, verco_buf, GL_STATIC_DRAW)
+
+		
+		glGenBuffers(1, ebo_buf)
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo_buf[0])
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, 48, indices_buf, GL_STATIC_DRAW)
+
+		# position attribute
+		glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,32,None)
+		glEnableVertexAttribArray(0)
+		#color attribute
+		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 32, 12)
+		glEnableVertexAttribArray(1)
+		#texture coordinates attribute
+		glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 32, 24)
+		glEnableVertexAttribArray(2)
+		
+		# get shader and quilt from holoplay but display using own setup
 		glUseProgram(holoplay.hp_getLightfieldShader())
+		glBindVertexArray(vao_buf[0])
 		glBindTexture(GL_TEXTURE_2D, holoplay.hp_getQuiltTexture())
-
-		texco = [(1, 1), (0, 1), (0, 0), (1, 0)]
-		verco = [(1.0, 1.0), (-1.0, 1.0), (-1.0, -1.0), (1.0, -1.0)]
-
-		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
-
-		#glColor4f(1.0, 1.0, 1.0, 1.0)   	
-
-		#glBegin(GL_QUADS)
-		#for i in range(4):
-		#	glTexCoord3f(texco[i][0], texco[i][1], 0.0)
-	#		glVertex2f(verco[i][0], verco[i][1])
-		#glEnd() 	  
-
-		# restoring settings
-		glBindTexture(GL_TEXTURE_2D, act_tex[0])
-
-		glDisable(GL_TEXTURE_2D)
-
-		# reset view
-		#glMatrixMode(GL_PROJECTION)
-		#glPopMatrix()
-
-		#glMatrixMode(GL_MODELVIEW)
-		#glPopMatrix()
-
-		glViewport(viewport[0], viewport[1], viewport[2], viewport[3])
-		glScissor(viewport[0], viewport[1], viewport[2], viewport[3])
-		glUseProgram(0)
+		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0)
 
 	# operator functions
 	@classmethod
@@ -442,6 +407,9 @@ class OffScreenDraw(bpy.types.Operator):
 			# get the global properties from window manager
 			wm = context.window_manager	
 
+			# initialize holoplay plugin -k
+			holoplay.hp_initialize()
+
 			# when the user has loaded an image in the LKG tools panel, assume it is meant for viewing in the LKG as multiview
 			if context.scene.LKG_image != None:
 				num_multiview_images = int(wm.tilesHorizontal * wm.tilesVertical)
@@ -455,6 +423,7 @@ class OffScreenDraw(bpy.types.Operator):
 					tex = bpy.data.images.load(img_str)
 					self._LKGtexArray.append(tex)
 
+				self._send_images_to_holoplay(self._LKGtexArray)
 				OffScreenDraw.handle_add_viewer(self, context)
 			else:
 				OffScreenDraw.handle_add(self, context)
@@ -465,10 +434,7 @@ class OffScreenDraw(bpy.types.Operator):
 				# store the editor window from where the operator whas invoked
 				context.area.tag_redraw()
 			
-			scn = context.scene
-
-			# initialize holoplay plugin -k
-			holoplay.hp_initialize()
+			scn = context.scene			
 
 			# the focal distance of the active camera is used as focal plane
 			# thus it should not be 0 because then the system won't work
@@ -494,6 +460,7 @@ class OffScreenDraw(bpy.types.Operator):
 	def cancel(self, context):
 		OffScreenDraw.handle_remove()
 		OffScreenDraw.is_enabled = False
+		holoplay.hp_release()
 
 		if context.area:
 			context.area.tag_redraw()

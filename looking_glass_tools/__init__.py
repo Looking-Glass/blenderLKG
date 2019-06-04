@@ -19,7 +19,7 @@
 bl_info = {
 	"name": "Looking Glass Toolset",
 	"author": "Gottfried Hofmann, Kyle Appelgate",
-	"version": (1, 7),
+	"version": (1, 8),
 	"blender": (2, 80, 0),
 	"location": "3D View > Looking Glass Tab",
 	"description": "Creates a window showing the viewport from camera view ready for the looking glass display. Builds a render-setup for offline rendering looking glass-compatible images. Allows to view images rendered for looking glass by selecting the first image of the multiview sequence.",
@@ -104,7 +104,7 @@ class looking_glass_render_viewer(bpy.types.Panel):
 	bl_label = "Looking Glass Tools" # display name in the interface.
 	bl_space_type = "PROPERTIES"
 	bl_region_type = "WINDOW"
-	bl_context = '.objectmode'
+	#bl_context = '.objectmode'
 	#bl_category = "Looking Glass"
 
 	# the pointer property only works in Blender 2.79 or higher
@@ -134,7 +134,7 @@ class looking_glass_panel(bpy.types.Panel):
 	bl_label = "Looking Glass Configuration" # display name in the interface.
 	bl_space_type = "PROPERTIES"
 	bl_region_type = "WINDOW"
-	bl_context = '.objectmode'
+	#bl_context = '.objectmode'
 	#bl_category = "Looking Glass"
 
 	# exposed parameters stored in WindowManager as global props so they 
