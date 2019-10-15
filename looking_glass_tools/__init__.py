@@ -19,7 +19,7 @@
 bl_info = {
 	"name": "Looking Glass Toolset",
 	"author": "Gottfried Hofmann, Kyle Appelgate",
-	"version": (1, 8),
+	"version": (1, 9),
 	"blender": (2, 80, 0),
 	"location": "3D View > Looking Glass Tab",
 	"description": "Creates a window showing the viewport from camera view ready for the looking glass display. Builds a render-setup for offline rendering looking glass-compatible images. Allows to view images rendered for looking glass by selecting the first image of the multiview sequence.",
