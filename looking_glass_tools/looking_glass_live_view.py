@@ -114,7 +114,7 @@ class OffScreenDraw(bpy.types.Operator):
 		return projection_matrices
 	
 	@staticmethod
-	def update_offscreens(self, context, offscreen, modelview_matrices, projection_matrices):
+	def update_offscreens(self, context, offscreen, modelview_matrices, projection_matrices, bufferForImage):
 		''' helper method to update a whole list of offscreens '''
 
 		scene = context.scene
@@ -147,8 +147,6 @@ class OffScreenDraw(bpy.types.Operator):
 									'scene': context.scene,
 									'view_layer': context.view_layer,
 									}
-
-		bufferForImage = Buffer(GL_BYTE, qs_viewWidth * qs_viewHeight * 4)
 		
 		offscreen.bind()
 		
@@ -196,7 +194,7 @@ class OffScreenDraw(bpy.types.Operator):
 		
 			
 	@staticmethod
-	def draw_callback_px(self, context, offscreen):
+	def draw_callback_px(self, context, offscreen, bufferForImage):
 		''' Manges the draw handler for the live view '''
 		scene = context.scene
 		render = scene.render
@@ -240,10 +238,11 @@ class OffScreenDraw(bpy.types.Operator):
 		#offscreens = self._setup_offscreens(context, 1)
 		
 		# render the scene total_views times from different angles and store the results in offscreen objects
-		self.update_offscreens(self, context, offscreen, modelview_matrices, projection_matrices)		
+		self.update_offscreens(self, context, offscreen, modelview_matrices, projection_matrices, bufferForImage)		
 
 		#offscreens.free()
 
+		print("glGetError before draw: " + str(glGetError()))
 		#self._opengl_draw(context, offscreens, aspect_ratio, 1.0)
 		self.draw(context)
 
@@ -271,12 +270,12 @@ class OffScreenDraw(bpy.types.Operator):
 		self.area.tag_redraw()
 
 	@staticmethod
-	def handle_add(self, context, offscreen):
+	def handle_add(self, context, offscreen, bufferForImage):
 		''' The handler in the image editor is to actually draw the lenticular image.
 			The handler in the 3D view is meant to send update triggers to the image
 			editor handler whenever the 3D view updates. '''
 		OffScreenDraw._handle_draw = bpy.types.SpaceImageEditor.draw_handler_add(
-				self.draw_callback_px, (self, context, offscreen),
+				self.draw_callback_px, (self, context, offscreen, bufferForImage),
 				'WINDOW', 'POST_PIXEL',
 				)
 		OffScreenDraw._handle_draw_3dview = bpy.types.SpaceView3D.draw_handler_add(
@@ -378,7 +377,7 @@ class OffScreenDraw(bpy.types.Operator):
 			self.setupMyQuilt()
 
 		offscreen.bind()
-		bufferForImage = Buffer(GL_BYTE, qs_viewWidth * qs_viewHeight * 4)
+		#bufferForImage = Buffer(GL_BYTE, qs_viewWidth * qs_viewHeight * 4)
 
 		#print("Drawing View3D into Offscreen Buffer")
 		offscreen.draw_view3d(
@@ -508,6 +507,9 @@ class OffScreenDraw(bpy.types.Operator):
 		return {'PASS_THROUGH'}
 
 	def invoke(self, context, event):
+		global qs_viewWidth
+		global qs_viewHeight
+		
 		if OffScreenDraw.is_enabled:
 			self.cancel(context)
 
@@ -537,7 +539,8 @@ class OffScreenDraw(bpy.types.Operator):
 				OffScreenDraw.handle_add_viewer(self, context)
 			else:
 				offscreen = self._setup_offscreens(context, 1)
-				OffScreenDraw.handle_add(self, context, offscreen)
+				bufferForImage = Buffer(GL_BYTE, qs_viewWidth * qs_viewHeight * 4)
+				OffScreenDraw.handle_add(self, context, offscreen, bufferForImage)
 
 			OffScreenDraw.is_enabled = True
 
