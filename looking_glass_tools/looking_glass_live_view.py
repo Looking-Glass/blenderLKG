@@ -114,7 +114,7 @@ class OffScreenDraw(bpy.types.Operator):
 		return projection_matrices
 	
 	@staticmethod
-	def update_offscreens(self, context, offscreen, modelview_matrices, projection_matrices, bufferForImage):
+	def update_offscreens(self, context, offscreen, modelview_matrices, projection_matrices, quilt):
 		''' helper method to update a whole list of offscreens '''
 
 		scene = context.scene
@@ -133,7 +133,7 @@ class OffScreenDraw(bpy.types.Operator):
 			self.setupMyQuilt()
 		
 		# find the image editor window and create a faux context
-		for window in bpy.context.window_manager.windows:
+		""" for window in bpy.context.window_manager.windows:
 			screen = window.screen
 			for area in screen.areas:
 				if area.type == 'VIEW_3D':
@@ -146,41 +146,36 @@ class OffScreenDraw(bpy.types.Operator):
 									'space_data': space,
 									'scene': context.scene,
 									'view_layer': context.view_layer,
-									}
+									} """
 		
-		offscreen.bind()
-		
-		#for i in range(len(offscreens)):
-		for view in range(qs_numViews):
-			# added i as argument to _update_offscreen_m -k
-			#self._update_offscreen_m(self, override, offscreens[i], modelview_matrices[i], projection_matrices[i], i)
-			offscreen.draw_view3d(
-				scene,
-				override['view_layer'],
-				override['space_data'],
-				override['region'],
-				modelview_matrices[view],
-				projection_matrices[view],
-				)
+		with offscreen.bind():
+			for view in range(qs_numViews):
+				""" offscreen.draw_view3d(
+					scene,
+					override['view_layer'],
+					override['space_data'],
+					override['region'],
+					modelview_matrices[view],
+					projection_matrices[view],
+					) """
+				offscreen.draw_view3d(
+					scene,
+					context.view_layer,
+					context.space_data,
+					context.region,
+					modelview_matrices[view],
+					projection_matrices[view],
+					)
 
-			glReadBuffer(GL_BACK)
-			glReadPixels(0, 0, qs_viewWidth, qs_viewHeight, GL_RGBA, GL_UNSIGNED_BYTE, bufferForImage)
-			
-			glBindTexture(GL_TEXTURE_2D, hp_myQuilt[0])
-			x = int((view % qs_columns) * qs_viewWidth)
-			y = int(floor(view / qs_columns) * qs_viewHeight)
-			print("X: " + str(x) + " Y: " + str(y))
-			
-			glTexSubImage2D(GL_TEXTURE_2D, 0,x,y,qs_viewWidth, qs_viewHeight, GL_RGBA, GL_UNSIGNED_BYTE, bufferForImage)
+				glReadBuffer(GL_BACK)				
+				glBindTexture(GL_TEXTURE_2D, quilt)
+				x = int((view % qs_columns) * qs_viewWidth)
+				y = int(floor(view / qs_columns) * qs_viewHeight)
+				#print("X: " + str(x) + " Y: " + str(y))
 
-		offscreen.unbind()
+				''' glCopyTexSubImage2D works like a direct call to glReadPixels, saves one step '''
+				glCopyTexSubImage2D(GL_TEXTURE_2D, 0,x,y,0,0,qs_viewWidth, qs_viewHeight)
 
-		# glBindTexture(GL_TEXTURE_2D, hp_myQuilt[0])
-		# bufferForQuilt = Buffer(GL_BYTE, qs_width * qs_height * 4)
-		# glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, bufferForQuilt)
-		# img = bpy.data.images.new("test", qs_width, qs_height)
-		# img.pixels = [v / 255 for v in bufferForQuilt]
-		
 
 
 	def _setup_matrices_from_existing_cameras(self, context, cam_parent):
@@ -194,7 +189,7 @@ class OffScreenDraw(bpy.types.Operator):
 		
 			
 	@staticmethod
-	def draw_callback_px(self, context, offscreen, bufferForImage):
+	def draw_callback_px(self, context, offscreen, quilt):
 		''' Manges the draw handler for the live view '''
 		scene = context.scene
 		render = scene.render
@@ -232,19 +227,13 @@ class OffScreenDraw(bpy.types.Operator):
 			#create lists of matrices for modelview and projection
 			modelview_matrices = self.setup_modelview_matrices(modelview_matrix, x_offsets)
 			projection_matrices = self.setup_projection_matrices(projection_matrix, projection_offsets)
-
-		# prepare offscreen render buffers
-		#offscreens = self._setup_offscreens(context, total_views)
-		#offscreens = self._setup_offscreens(context, 1)
 		
-		# render the scene total_views times from different angles and store the results in offscreen objects
-		self.update_offscreens(self, context, offscreen, modelview_matrices, projection_matrices, bufferForImage)		
-
-		#offscreens.free()
+		# render the scene total_views times from different angles and store the results in a quilt
+		self.update_offscreens(self, context, offscreen, modelview_matrices, projection_matrices, quilt)		
 
 		print("glGetError before draw: " + str(glGetError()))
 		#self._opengl_draw(context, offscreens, aspect_ratio, 1.0)
-		self.draw(context)
+		self.draw(context, quilt)
 
 	@staticmethod
 	def draw_callback_viewer(self, context):
@@ -258,7 +247,8 @@ class OffScreenDraw(bpy.types.Operator):
 		if scene.LKG_image != None:
 			offscreens = None
 			#self._opengl_draw(context, offscreens, aspect_ratio, 1.0)
-			self.draw(context)
+			texture = holoplay.hp_getQuiltTexture()
+			self.draw(context, texture)
 		else:
 			print("No image selected to draw in the LKG, removing viewer")
 			self.cancel(context)
@@ -270,12 +260,12 @@ class OffScreenDraw(bpy.types.Operator):
 		self.area.tag_redraw()
 
 	@staticmethod
-	def handle_add(self, context, offscreen, bufferForImage):
+	def handle_add(self, context, offscreen, quilt):
 		''' The handler in the image editor is to actually draw the lenticular image.
 			The handler in the 3D view is meant to send update triggers to the image
 			editor handler whenever the 3D view updates. '''
-		OffScreenDraw._handle_draw = bpy.types.SpaceImageEditor.draw_handler_add(
-				self.draw_callback_px, (self, context, offscreen, bufferForImage),
+		OffScreenDraw._handle_draw = bpy.types.SpaceView3D.draw_handler_add(
+				self.draw_callback_px, (self, context, offscreen, quilt),
 				'WINDOW', 'POST_PIXEL',
 				)
 		OffScreenDraw._handle_draw_3dview = bpy.types.SpaceView3D.draw_handler_add(
@@ -305,19 +295,18 @@ class OffScreenDraw(bpy.types.Operator):
 
 	@staticmethod
 	def _setup_offscreens(context, num_offscreens = 1):
-		''' create off-screen buffers '''
+		''' Returns a list of num_offscreens off-screen buffers or one off-screen buffer directly '''
 		offscreens = list()
 		for i in range(num_offscreens):
 			try:
 				# edited this to be higher resolution, but it should be dynamic -k
-				# there might be a way we can make it toggleable between standard (512x256 4x8) and hires (819x455 5x9)
-				offscreen = gpu.types.GPUOffScreen(819, 455)
+				offscreen = gpu.types.GPUOffScreen(qs_viewWidth, qs_viewHeight)
 			except Exception as e:
 				print(e)
 				offscreen = None
 			offscreens.append(offscreen)
 		
-		# do not return a list when only one offscreen is set up (deprecated)	
+		# do not return a list when only one offscreen is set up
 		if num_offscreens == 1:
 			return offscreens[0]
 		else:
@@ -438,7 +427,8 @@ class OffScreenDraw(bpy.types.Operator):
 		if glIsTexture(tex_id):
 			glDeleteTextures(1, id_buf)
 
-	def draw(self, context):
+	@staticmethod
+	def draw(context, texture_id):
 		''' Draws a rectangle '''
 		context = bpy.context
 		scene = context.scene
@@ -490,7 +480,7 @@ class OffScreenDraw(bpy.types.Operator):
 		glBindVertexArray(vao_buf[0])
 		#glBindTexture(GL_TEXTURE_2D, holoplay.hp_getQuiltTexture())
 		glActiveTexture(GL_TEXTURE0)
-		glBindTexture(GL_TEXTURE_2D, hp_myQuilt[0])
+		glBindTexture(GL_TEXTURE_2D, texture_id)
 		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0)
 		print("Drawn")
 
@@ -509,6 +499,7 @@ class OffScreenDraw(bpy.types.Operator):
 	def invoke(self, context, event):
 		global qs_viewWidth
 		global qs_viewHeight
+		global hp_myQuilt
 		
 		if OffScreenDraw.is_enabled:
 			self.cancel(context)
@@ -539,8 +530,10 @@ class OffScreenDraw(bpy.types.Operator):
 				OffScreenDraw.handle_add_viewer(self, context)
 			else:
 				offscreen = self._setup_offscreens(context, 1)
-				bufferForImage = Buffer(GL_BYTE, qs_viewWidth * qs_viewHeight * 4)
-				OffScreenDraw.handle_add(self, context, offscreen, bufferForImage)
+				#bufferForImage = Buffer(GL_BYTE, qs_viewWidth * qs_viewHeight * 4)
+				if hp_myQuilt == None:
+					self.setupMyQuilt()
+				OffScreenDraw.handle_add(self, context, offscreen, hp_myQuilt[0])
 
 			OffScreenDraw.is_enabled = True
 
