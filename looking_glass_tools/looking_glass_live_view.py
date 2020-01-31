@@ -28,10 +28,10 @@ from bpy.types import AddonPreferences, PropertyGroup
 from bpy.props import FloatProperty, PointerProperty
 from gpu_extras.presets import draw_texture_2d
 
-# only works when DLL is correctly installed
-#holoplay = ctypes.CDLL("HoloPlayAPI")
-# for testing purposes of the latest lib version the path to HoloPlay is hardcoded
-holoplay = ctypes.CDLL("c:\\tmp\\HoloPlayAPI")
+# this addon uses a newer version of the C API which does not have an installer yet so the user has to set the path in the addon preferences
+#holoplay = ctypes.CDLL("c:\\tmp\\HoloPlayAPI")
+#holoplay = ctypes.CDLL(bpy.context.preferences.addons['looking_glass_tools'].preferences.filepath)
+holoplay = None
 
 # some global vars we need to get rid of
 qs_width = 4096
@@ -45,8 +45,10 @@ qs_numViews = 45
 hp_myQuilt = None
 
 class OffScreenDraw(bpy.types.Operator):
+	''' Manages drawing of the looking glass live view '''
 	bl_idname = "view3d.offscreen_draw"
 	bl_label = "Looking Glass Live View"
+	bl_description = "Starts and stops the LKG live view drawing."
 
 	_handle_draw = None
 	_handle_draw_3dview = None
@@ -132,32 +134,8 @@ class OffScreenDraw(bpy.types.Operator):
 		if hp_myQuilt == None:
 			self.setupMyQuilt()
 		
-		# find the image editor window and create a faux context
-		""" for window in bpy.context.window_manager.windows:
-			screen = window.screen
-			for area in screen.areas:
-				if area.type == 'VIEW_3D':
-					for region in area.regions:
-						if region.type == 'WINDOW':
-							for space in area.spaces:
-								if space.type == 'VIEW_3D': 
-									override = {'area': area,
-									'region': region,
-									'space_data': space,
-									'scene': context.scene,
-									'view_layer': context.view_layer,
-									} """
-		
 		with offscreen.bind():
 			for view in range(qs_numViews):
-				""" offscreen.draw_view3d(
-					scene,
-					override['view_layer'],
-					override['space_data'],
-					override['region'],
-					modelview_matrices[view],
-					projection_matrices[view],
-					) """
 				offscreen.draw_view3d(
 					scene,
 					context.view_layer,
@@ -171,12 +149,9 @@ class OffScreenDraw(bpy.types.Operator):
 				glBindTexture(GL_TEXTURE_2D, quilt)
 				x = int((view % qs_columns) * qs_viewWidth)
 				y = int(floor(view / qs_columns) * qs_viewHeight)
-				#print("X: " + str(x) + " Y: " + str(y))
 
 				''' glCopyTexSubImage2D works like a direct call to glReadPixels, saves one step '''
 				glCopyTexSubImage2D(GL_TEXTURE_2D, 0,x,y,0,0,qs_viewWidth, qs_viewHeight)
-
-
 
 	def _setup_matrices_from_existing_cameras(self, context, cam_parent):
 		modelview_matrices = []
@@ -190,50 +165,50 @@ class OffScreenDraw(bpy.types.Operator):
 			
 	@staticmethod
 	def draw_callback_px(self, context, offscreen, quilt):
-		''' Manges the draw handler for the live view '''
+		''' Manages the draw handler for the live view '''
 		scene = context.scene
 		render = scene.render
 		wm = context.window_manager
 
-		#should be the same aspect ratio as the looking glass display
-		aspect_ratio = render.resolution_x / render.resolution_y
-		
-		total_views = wm.tilesHorizontal * wm.tilesVertical
+		#TODO: super ugly hack because area spaces do not allow custom properties
+		if context.area.spaces[0].stereo_3d_volume_alpha > 0.075:
+			#should be the same aspect ratio as the looking glass display
+			aspect_ratio = render.resolution_x / render.resolution_y
+			
+			total_views = wm.tilesHorizontal * wm.tilesVertical
 
-		#check whether multiview render setup has been created
-		cam_parent = bpy.data.objects.get("Multiview")
-		if cam_parent is not None:
-			modelview_matrices, projection_matrices = self._setup_matrices_from_existing_cameras(context, cam_parent)			
-		else:
-			camera_active = scene.camera
-			modelview_matrix, projection_matrix = self._setup_matrices_from_camera(context, camera_active)
-			
-			# compute the field of view from projection matrix directly
-			# because focal length fov in Cycles is relative to the longer side of the view rectangle
-			view_cone = 2.0*atan( 1.0/projection_matrix[1][1] ) 	   
-			view_angles = self.compute_view_angles(view_cone, total_views)
-			
-			if camera_active.data.dof_object == None:
-				convergence_distance = camera_active.data.dof_distance
+			#check whether multiview render setup has been created
+			cam_parent = bpy.data.objects.get("Multiview")
+			if cam_parent is not None:
+				modelview_matrices, projection_matrices = self._setup_matrices_from_existing_cameras(context, cam_parent)			
 			else:
-				convergence_vector = camera_active.location - camera_active.data.dof_object.location
-				convergence_distance = convergence_vector.magnitude
+				camera_active = scene.camera
+				modelview_matrix, projection_matrix = self._setup_matrices_from_camera(context, camera_active)
+				
+				# compute the field of view from projection matrix directly
+				# because focal length fov in Cycles is relative to the longer side of the view rectangle
+				view_cone = 2.0*atan( 1.0/projection_matrix[1][1] ) 	   
+				view_angles = self.compute_view_angles(view_cone, total_views)
+				
+				if camera_active.data.dof_object == None:
+					convergence_distance = camera_active.data.dof_distance
+				else:
+					convergence_vector = camera_active.location - camera_active.data.dof_object.location
+					convergence_distance = convergence_vector.magnitude
 
-			size = convergence_distance * tan(view_cone * 0.5)
+				size = convergence_distance * tan(view_cone * 0.5)
+				
+				x_offsets = self.compute_x_offsets(convergence_distance, view_angles)		
+				projection_offsets = self.compute_projection_offsets(x_offsets, aspect_ratio, size)
+
+				#create lists of matrices for modelview and projection
+				modelview_matrices = self.setup_modelview_matrices(modelview_matrix, x_offsets)
+				projection_matrices = self.setup_projection_matrices(projection_matrix, projection_offsets)
 			
-			x_offsets = self.compute_x_offsets(convergence_distance, view_angles)		
-			projection_offsets = self.compute_projection_offsets(x_offsets, aspect_ratio, size)
+			# render the scene total_views times from different angles and store the results in a quilt
+			self.update_offscreens(self, context, offscreen, modelview_matrices, projection_matrices, quilt)		
 
-			#create lists of matrices for modelview and projection
-			modelview_matrices = self.setup_modelview_matrices(modelview_matrix, x_offsets)
-			projection_matrices = self.setup_projection_matrices(projection_matrix, projection_offsets)
-		
-		# render the scene total_views times from different angles and store the results in a quilt
-		self.update_offscreens(self, context, offscreen, modelview_matrices, projection_matrices, quilt)		
-
-		print("glGetError before draw: " + str(glGetError()))
-		#self._opengl_draw(context, offscreens, aspect_ratio, 1.0)
-		self.draw(context, quilt)
+			self.draw(context, quilt)
 
 	@staticmethod
 	def draw_callback_viewer(self, context):
@@ -261,8 +236,8 @@ class OffScreenDraw(bpy.types.Operator):
 
 	@staticmethod
 	def handle_add(self, context, offscreen, quilt):
-		''' The handler in the image editor is to actually draw the lenticular image.
-			The handler in the 3D view is meant to send update triggers to the image
+		''' The handler on the image editor is to actually draw the lenticular image.
+			The handler on the 3D view is meant to send update triggers to the image
 			editor handler whenever the 3D view updates. '''
 		OffScreenDraw._handle_draw = bpy.types.SpaceView3D.draw_handler_add(
 				self.draw_callback_px, (self, context, offscreen, quilt),
@@ -349,8 +324,6 @@ class OffScreenDraw(bpy.types.Operator):
 	def _update_offscreen_m(self, context, offscreen, modelview_matrix, projection_matrix, view):
 		''' render viewport into offscreen buffer using matrices '''
 		scene = bpy.context.scene
-		#context_real = bpy.context
-		#view_layer = bpy.context.view_layer
 
 		global qs_width
 		global qs_height
@@ -368,7 +341,7 @@ class OffScreenDraw(bpy.types.Operator):
 		offscreen.bind()
 		#bufferForImage = Buffer(GL_BYTE, qs_viewWidth * qs_viewHeight * 4)
 
-		#print("Drawing View3D into Offscreen Buffer")
+		# Drawing View3D into Offscreen Buffer
 		offscreen.draw_view3d(
 				scene,
 				context['view_layer'],
@@ -388,23 +361,19 @@ class OffScreenDraw(bpy.types.Operator):
 		
 		glTexSubImage2D(GL_TEXTURE_2D, 0,x,y,qs_viewWidth, qs_viewHeight, GL_RGBA, GL_UNSIGNED_BYTE, bufferForImage)
 
-		offscreen.unbind()
-
-		
+		offscreen.unbind()		
 				
 		# added dll call to add offscreen texture to quilt -k
 		# todo: once dll is update won't have to bind texture
 		# glActiveTexture(GL_TEXTURE0)
 		# glBindTexture(GL_TEXTURE_2D, offscreen.color_texture)
-		# print("glGetError() before copyViewToQuilt: " + str(glGetError()))
 		# holoplay.hp_copyViewToQuilt(ctypes.c_uint(view))
-		# print("glGetError() after copyViewToQuilt: " + str(glGetError()))
 
 	@staticmethod
 	def _send_images_to_holoplay(images):
 		''' parses an array of textures and sends it to the holoplay SDK '''
 		for i,image in enumerate(images):
-			print(image.name)
+			print("Adding " + image.name + " to quilt.")
 			image.gl_load()
 			glActiveTexture(GL_TEXTURE0)
 			glBindTexture(GL_TEXTURE_2D, image.bindcode)
@@ -482,13 +451,13 @@ class OffScreenDraw(bpy.types.Operator):
 		glActiveTexture(GL_TEXTURE0)
 		glBindTexture(GL_TEXTURE_2D, texture_id)
 		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0)
-		print("Drawn")
+		#print("Draw method successfull")
 
 	# operator functions
-	@classmethod
-	def poll(cls, context):
-		''' Limit the operator to the area type specified '''
-		return context.area.type == 'IMAGE_EDITOR'
+	# @classmethod
+	# def poll(cls, context):
+	# 	''' Limit the operator to the area type specified '''
+	# 	return context.area.type == 'IMAGE_EDITOR'
 
 	def modal(self, context, event):
 		if context.area:
@@ -500,6 +469,7 @@ class OffScreenDraw(bpy.types.Operator):
 		global qs_viewWidth
 		global qs_viewHeight
 		global hp_myQuilt
+		global holoplay
 		
 		if OffScreenDraw.is_enabled:
 			self.cancel(context)
@@ -510,6 +480,10 @@ class OffScreenDraw(bpy.types.Operator):
 			# get the global properties from window manager
 			wm = context.window_manager	
 
+			#holoplay = ctypes.CDLL("c:\\tmp\\HoloPlayAPI")
+			# needs exactly the name of the addon but we are in submodle 'looking_glass_tools.looking_glass_live_view' so split at dot
+			holoplay = ctypes.CDLL(bpy.context.preferences.addons[__name__.split('.')[0]].preferences.filepath)
+			
 			# initialize holoplay plugin -k
 			holoplay.hp_initialize()
 
@@ -561,6 +535,8 @@ class OffScreenDraw(bpy.types.Operator):
 				aspect_ratio = wm.screenW / wm.screenH
 				context.scene.render.resolution_x = context.scene.render.resolution_y * aspect_ratio
 
+			print("Setting up window. Texture id of quilt: " + str(holoplay.hp_getQuiltTexture()))
+			
 			context.window_manager.modal_handler_add(self)
 			return {'RUNNING_MODAL'}
 
@@ -586,7 +562,15 @@ class looking_glass_window_setup(bpy.types.Operator):
 
 		# Change area type
 		area = bpy.context.window_manager.windows[-1].screen.areas[0]
-		area.type = 'IMAGE_EDITOR'
+		# when the user has loaded an image in the LKG tools panel, assume it is meant for viewing in the LKG as multiview
+		if context.scene.LKG_image != None:
+			area.type = 'IMAGE_EDITOR'
+		else:
+			area.type = 'VIEW_3D'
+			# ugly hack to identify the editor later on
+			area.spaces[0].stereo_3d_volume_alpha = 0.1
+		# disable the header because it interferes with the lenticular setup
+		area.spaces[0].show_region_header = False
 		OffScreenDraw.area = area
 		return {'FINISHED'}
 

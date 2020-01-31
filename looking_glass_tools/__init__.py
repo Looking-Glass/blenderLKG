@@ -20,7 +20,7 @@ bl_info = {
 	"name": "Looking Glass Toolset",
 	"author": "Gottfried Hofmann, Kyle Appelgate",
 	"version": (1, 9),
-	"blender": (2, 80, 0),
+	"blender": (2, 82, 0),
 	"location": "3D View > Looking Glass Tab",
 	"description": "Creates a window showing the viewport from camera view ready for the looking glass display. Builds a render-setup for offline rendering looking glass-compatible images. Allows to view images rendered for looking glass by selecting the first image of the multiview sequence.",
 	"wiki_url": "",
@@ -59,41 +59,18 @@ from bpy.types import AddonPreferences, PropertyGroup
 from bpy.props import FloatProperty, PointerProperty
 
 
-# TODO: Make this a class method
-def set_defaults():
-	''' Returns the file path of the configuration utility shipping with the addon '''
-	script_file = os.path.realpath(__file__)
-	directory = os.path.dirname(script_file)
-	filepath = ''
-
-	if platform.system() == "Linux":
-		filepath = directory + "/c_calibration_loader_linux_x86"
-	elif platform.system() == "Windows":
-		filepath = directory + "\c_calibration_loader_win.exe"
-	elif platform.system() == "Darwin":
-		filepath = directory + "/c_calibration_loader_mac"
-	else:
-		print("Operating system not recognized, path to calibration utility nees to be set manually.")
-		return ''
-	
-	if os.path.isfile(filepath):
-		return filepath
-	else:
-		print("Could not find pre-installed calibration loader")
-		return ''
-
 class LookingGlassPreferences(AddonPreferences):
 	# this must match the addon name
 	bl_idname = __name__
 
 	filepath: bpy.props.StringProperty(
-			name="Location of the Config Extration Utility",
-			subtype='FILE_PATH',
-			default = set_defaults()
+			name="Location of the Looking Glas C-API DLL",
+			subtype='FILE_PATH'
 			)
 
 	def draw(self, context):
 		layout = self.layout
+		layout.label(text="Please set the location of the Looking Glass dll library here.")
 		layout.prop(self, "filepath")
 
 # ------------- The Tools Panel ----------------
@@ -102,13 +79,13 @@ class looking_glass_render_viewer(bpy.types.Panel):
 	""" Looking Glass Render Viewer """ 
 	bl_idname = "lookingglass.panel_tools" # unique identifier for buttons and menu items to reference.
 	bl_label = "Looking Glass Tools" # display name in the interface.
-	bl_space_type = "PROPERTIES"
-	bl_region_type = "WINDOW"
+	#bl_space_type = "PROPERTIES"
+	bl_space_type = "VIEW_3D"
+	#bl_region_type = "WINDOW"
+	bl_region_type = "UI"
 	#bl_context = '.objectmode'
-	#bl_category = "Looking Glass"
+	bl_category = "LKG"
 
-	# the pointer property only works in Blender 2.79 or higher
-	# older versions will crash
 	bpy.types.Scene.LKG_image = bpy.props.PointerProperty(
 		name="LKG Image",
 		type=bpy.types.Image,
@@ -118,7 +95,8 @@ class looking_glass_render_viewer(bpy.types.Panel):
 	def draw(self, context):
 		layout = self.layout
 		layout.operator("lookingglass.render_setup", text="Create Render Setup", icon='PLUGIN')
-		layout.operator("lookingglass.window_setup", text="Create LKG Window", icon='PLUGIN')
+		layout.operator("lookingglass.window_setup", text="Open LKG Window", icon='PLUGIN')
+		layout.operator("view3d.offscreen_draw", text="Start LKG Live View", icon='PLUGIN')
 
 		row = layout.row(align = True)
 		row.label(text = "LKG image to view:")
@@ -132,10 +110,10 @@ class looking_glass_panel(bpy.types.Panel):
 	""" Looking Glass Properties """ 
 	bl_idname = "lookingglass.panel_config" # unique identifier for buttons and menu items to reference.
 	bl_label = "Looking Glass Configuration" # display name in the interface.
-	bl_space_type = "PROPERTIES"
-	bl_region_type = "WINDOW"
+	bl_space_type = "VIEW_3D"
+	bl_region_type = "UI"
 	#bl_context = '.objectmode'
-	#bl_category = "Looking Glass"
+	bl_category = "LKG"
 
 	# exposed parameters stored in WindowManager as global props so they 
 	# can be changed even when loading the addon (due to config file parsing)
@@ -170,7 +148,6 @@ class looking_glass_panel(bpy.types.Panel):
 			)
 	bpy.types.WindowManager.tilesHorizontal = bpy.props.IntProperty(
 			name = "Horizontal Tiles",
-			# changed to 5 for hires -k
 			default = 5,
 			min = 0,
 			max = 100,
@@ -178,7 +155,6 @@ class looking_glass_panel(bpy.types.Panel):
 			)
 	bpy.types.WindowManager.tilesVertical = bpy.props.IntProperty(
 			name = "Vertical Tiles",
-			# changed to 9 for hires -k
 			default = 9,
 			min = 0,
 			max = 100,
@@ -204,6 +180,7 @@ def register():
 	for cls in classes:
 		register_class(cls)
 	bpy.types.IMAGE_MT_view.append(looking_glass_live_view.menu_func)
+	bpy.types.VIEW3D_MT_view.append(looking_glass_live_view.menu_func)
 	print("registered the live view")
 
 def unregister():
@@ -211,6 +188,7 @@ def unregister():
 	for cls in reversed(classes):
 		unregister_class(cls)
 	bpy.types.IMAGE_MT_view.remove(looking_glass_live_view.menu_func)
+	bpy.types.VIEW3D_MT_view.remove(looking_glass_live_view.menu_func)
 
 if __name__ == "__main__":
 	register()
