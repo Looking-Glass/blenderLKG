@@ -202,8 +202,9 @@ class lkgRenderSetup(bpy.types.Operator):
 		newView.name = 'view.' + str(i).zfill(2)
 		newView.camera_suffix = '.' + str(i).zfill(2)
 
-		#cam should be invisible in the viewport because otherwise a line will appear in the LKG
-		cam.hide_viewport = True
+		# cam should be invisible in the viewport because otherwise a line will appear in the LKG
+		# for 2.8 we need to use hide_set(True) because hide_viewport will globally disable it in viewports, temporarily breaking the child-parent-relationship
+		cam.hide_set(True)
 
 		return cam
 

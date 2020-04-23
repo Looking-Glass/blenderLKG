@@ -236,37 +236,43 @@ class OffScreenDraw(bpy.types.Operator):
 
 	@staticmethod
 	def handle_add(self, context, offscreen, quilt):
-		''' The handler on the image editor is to actually draw the lenticular image.
-			The handler on the 3D view is meant to send update triggers to the image
-			editor handler whenever the 3D view updates. '''
-		OffScreenDraw._handle_draw = bpy.types.SpaceView3D.draw_handler_add(
+		''' Creates a draw handler in the 3D view and a None handler for the image editor '''
+		OffScreenDraw._handle_draw_3dview = bpy.types.SpaceView3D.draw_handler_add(
 				self.draw_callback_px, (self, context, offscreen, quilt),
 				'WINDOW', 'POST_PIXEL',
 				)
-		OffScreenDraw._handle_draw_3dview = bpy.types.SpaceView3D.draw_handler_add(
-				self.draw_callback_3dview, (self, context),
-				'WINDOW', 'POST_PIXEL',
-				)
+		# Redraw the area stored in self.area to force update
+		self.area.tag_redraw()
+		OffScreenDraw._handle_draw_image_editor = None
+		# OffScreenDraw._handle_draw_3dview = bpy.types.SpaceView3D.draw_handler_add(
+		# 		self.draw_callback_3dview, (self, context),
+		# 		'WINDOW', 'POST_PIXEL',
+		# 		)
 
 	@staticmethod
-	def handle_add_viewer(self, context):
+	def handle_add_image_editor(self, context):
 		''' The handler to view multiview image sequences '''
-		OffScreenDraw._handle_draw = bpy.types.SpaceImageEditor.draw_handler_add(
+		OffScreenDraw._handle_draw_image_editor = bpy.types.SpaceImageEditor.draw_handler_add(
 				self.draw_callback_viewer, (self, context),
 				'WINDOW', 'POST_PIXEL',
 				)
+		# Redraw the area stored in self.area to force update
+		self.area.tag_redraw()
+		OffScreenDraw._handle_draw_3dview = None
 
 	@staticmethod
 	def handle_remove():
-		if OffScreenDraw._handle_draw is not None:
-			bpy.types.SpaceImageEditor.draw_handler_remove(OffScreenDraw._handle_draw, 'WINDOW')
-
-		OffScreenDraw._handle_draw = None
+		if OffScreenDraw._handle_draw_image_editor is not None:
+			print("Removing Draw Handler from Image Editor")
+			bpy.types.SpaceImageEditor.draw_handler_remove(OffScreenDraw._handle_draw_image_editor, 'WINDOW')
+			OffScreenDraw._handle_draw_image_editor = None
 		
 		if OffScreenDraw._handle_draw_3dview is not None:
+			print("Removing Draw Handler from 3D View")
+			#bpy.types.SpaceView3D.draw_handler_remove(OffScreenDraw._handle_draw_3dview, 'WINDOW')
 			bpy.types.SpaceView3D.draw_handler_remove(OffScreenDraw._handle_draw_3dview, 'WINDOW')
-
-		OffScreenDraw._handle_draw_3dview = None
+			OffScreenDraw._handle_draw_3dview = None	
+		
 
 	@staticmethod
 	def _setup_offscreens(context, num_offscreens = 1):
@@ -472,6 +478,7 @@ class OffScreenDraw(bpy.types.Operator):
 		global holoplay
 		
 		if OffScreenDraw.is_enabled:
+			print("Stopping drawing of Looking Glass Live View")
 			self.cancel(context)
 
 			return {'FINISHED'}
@@ -480,9 +487,10 @@ class OffScreenDraw(bpy.types.Operator):
 			# get the global properties from window manager
 			wm = context.window_manager	
 
-			#holoplay = ctypes.CDLL("c:\\tmp\\HoloPlayAPI")
+			# this version works with the old HoloPlayAPI which can be installed and added to PATH
+			holoplay = ctypes.CDLL("HoloPlayAPI")
 			# needs exactly the name of the addon but we are in submodle 'looking_glass_tools.looking_glass_live_view' so split at dot
-			holoplay = ctypes.CDLL(bpy.context.preferences.addons[__name__.split('.')[0]].preferences.filepath)
+			#holoplay = ctypes.CDLL(bpy.context.preferences.addons[__name__.split('.')[0]].preferences.filepath)
 			
 			# initialize holoplay plugin -k
 			holoplay.hp_initialize()
@@ -501,7 +509,7 @@ class OffScreenDraw(bpy.types.Operator):
 					self._LKGtexArray.append(tex)
 
 				self._send_images_to_holoplay(self._LKGtexArray)
-				OffScreenDraw.handle_add_viewer(self, context)
+				OffScreenDraw.handle_add_image_editor(self, context)
 			else:
 				offscreen = self._setup_offscreens(context, 1)
 				#bufferForImage = Buffer(GL_BYTE, qs_viewWidth * qs_viewHeight * 4)
@@ -547,6 +555,8 @@ class OffScreenDraw(bpy.types.Operator):
 
 		if context.area:
 			context.area.tag_redraw()
+
+		print("Cancel finished")
 
 # ------------ UI Functions -------------
 class looking_glass_window_setup(bpy.types.Operator):
