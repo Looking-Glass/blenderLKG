@@ -20,7 +20,7 @@ bl_info = {
 	"name": "Looking Glass Toolset",
 	"author": "Gottfried Hofmann, Kyle Appelgate",
 	"version": (1, 9),
-	"blender": (2, 82, 0),
+	"blender": (2, 83, 0),
 	"location": "3D View > Looking Glass Tab",
 	"description": "Creates a window showing the viewport from camera view ready for the looking glass display. Builds a render-setup for offline rendering looking glass-compatible images. Allows to view images rendered for looking glass by selecting the first image of the multiview sequence.",
 	"wiki_url": "",
@@ -77,7 +77,7 @@ class LookingGlassPreferences(AddonPreferences):
 class looking_glass_render_viewer(bpy.types.Panel):
 		
 	""" Looking Glass Render Viewer """ 
-	bl_idname = "lookingglass.panel_tools" # unique identifier for buttons and menu items to reference.
+	bl_idname = "LKG_PT_panel_tools" # unique identifier for buttons and menu items to reference.
 	bl_label = "Looking Glass Tools" # display name in the interface.
 	#bl_space_type = "PROPERTIES"
 	bl_space_type = "VIEW_3D"
@@ -108,7 +108,7 @@ class looking_glass_render_viewer(bpy.types.Panel):
 class looking_glass_panel(bpy.types.Panel):
 		
 	""" Looking Glass Properties """ 
-	bl_idname = "lookingglass.panel_config" # unique identifier for buttons and menu items to reference.
+	bl_idname = "LKG_PT_panel_config" # unique identifier for buttons and menu items to reference.
 	bl_label = "Looking Glass Configuration" # display name in the interface.
 	bl_space_type = "VIEW_3D"
 	bl_region_type = "UI"
