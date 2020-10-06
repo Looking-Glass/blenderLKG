@@ -136,7 +136,7 @@ class lkgRenderSetup(bpy.types.Operator):
 		
 	def get_vertical_fov_from_camera(self, cam):
 		''' returns the vertical field of view of the camera '''
-		wm = bpy.context.window_manager
+		# wm = bpy.context.window_manager
 		render = bpy.context.scene.render
 		projection_matrix = cam.calc_matrix_camera(render.resolution_x, render.resolution_y, render.pixel_aspect_x, render.pixel_aspect_y)
 		fov_vertical = 2.0*atan( 1.0/projection_matrix[1][1] )

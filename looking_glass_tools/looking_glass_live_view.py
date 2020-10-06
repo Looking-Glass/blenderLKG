@@ -19,6 +19,8 @@
 import bpy
 import gpu
 import logging
+import time
+# import timeit # only for benchmarking
 import os
 import ctypes
 from bgl import *
@@ -143,6 +145,7 @@ class OffScreenDraw(bpy.types.Operator):
 
 		with offscreen.bind():
 			for view in range(qs_numViews):
+				# start_time = timeit.default_timer()
 				offscreen.draw_view3d(
 					scene,
 					context.view_layer,
@@ -151,7 +154,9 @@ class OffScreenDraw(bpy.types.Operator):
 					modelview_matrices[view],
 					projection_matrices[view],
 					)
+				# print("Offscreen rendering: %.6f" % (timeit.default_timer() - start_time))
 
+				# start_time = timeit.default_timer()
 				glReadBuffer(GL_BACK)
 				glBindTexture(GL_TEXTURE_2D, quilt)
 				x = int((view % qs_columns) * qs_viewWidth)
@@ -172,6 +177,7 @@ class OffScreenDraw(bpy.types.Operator):
 							GL_COLOR_BUFFER_BIT, GL_LINEAR)
 							
 				glBindFramebuffer(GL_DRAW_FRAMEBUFFER, old_draw_framebuffer[0])
+				# print("Copying to quilt: %.6f" % (timeit.default_timer() - start_time))
 
 	def _setup_matrices_from_existing_cameras(self, context, cam_parent):
 		modelview_matrices = []
@@ -192,6 +198,7 @@ class OffScreenDraw(bpy.types.Operator):
 
 		# TODO: super ugly hack because area spaces do not allow custom properties
 		if context.area.spaces[0].stereo_3d_volume_alpha > 0.075:
+			# start_time = timeit.default_timer()
 			# should be the same aspect ratio as the looking glass display
 			aspect_ratio = render.resolution_x / render.resolution_y
 
@@ -230,12 +237,17 @@ class OffScreenDraw(bpy.types.Operator):
 					modelview_matrix, x_offsets)
 				projection_matrices = self.setup_projection_matrices(
 					projection_matrix, projection_offsets)
+			print("Computing matrices: %.6f" % (timeit.default_timer() - start_time))
 
+			# start_time = timeit.default_timer()
 			# render the scene total_views times from different angles and store the results in a quilt
 			self.update_offscreens(self, context, offscreen,
 								   modelview_matrices, projection_matrices, quilt)
+			# print("Offscreen rendering and quilt building total: %.6f" % (timeit.default_timer() - start_time))
 
+			# start_time = timeit.default_timer()
 			self.draw_new(context, quilt, batch, shader)
+			# print("Draw_new total: %.6f" % (timeit.default_timer() - start_time))
 
 	@staticmethod
 	def draw_callback_viewer(self, context, batch, shader):

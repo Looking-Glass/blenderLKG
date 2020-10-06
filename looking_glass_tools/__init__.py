@@ -19,7 +19,7 @@
 bl_info = {
 	"name": "Looking Glass Toolset",
 	"author": "Gottfried Hofmann, Kyle Appelgate",
-	"version": (1, 9),
+	"version": (2, 0),
 	"blender": (2, 83, 0),
 	"location": "3D View > Looking Glass Tab",
 	"description": "Creates a window showing the viewport from camera view ready for the looking glass display. Builds a render-setup for offline rendering looking glass-compatible images. Allows to view images rendered for looking glass by selecting the first image of the multiview sequence.",
@@ -52,6 +52,7 @@ import subprocess
 import logging
 import os
 import platform
+import pathlib
 from bgl import *
 from math import *
 from mathutils import *
@@ -64,13 +65,13 @@ class LookingGlassPreferences(AddonPreferences):
 	bl_idname = __name__
 
 	filepath: bpy.props.StringProperty(
-			name="Location of the Looking Glas C-API DLL",
+			name="Location of libHoloPlayCore",
 			subtype='FILE_PATH'
 			)
 
 	def draw(self, context):
 		layout = self.layout
-		layout.label(text="Please set the location of the Looking Glass dll library here.")
+		layout.label(text="Please set the location of the Looking Glass Library here.")
 		layout.prop(self, "filepath")
 
 # ------------- The Tools Panel ----------------
@@ -181,7 +182,26 @@ def register():
 		register_class(cls)
 	bpy.types.IMAGE_MT_view.append(looking_glass_live_view.menu_func)
 	bpy.types.VIEW3D_MT_view.append(looking_glass_live_view.menu_func)
-	print("registered the live view")
+	# set the default path to libHoloPlayCore on first registration, can be changed by the user
+	fp = bpy.context.preferences.addons['looking_glass_tools'].preferences.filepath
+	if fp == '':
+		home = pathlib.Path.home()
+		sys = platform.system()
+		lkgFolderName = "LookingGlass"
+		if sys.startswith('Darwin'):
+			print("Running on Mac OS")
+			# convert from PosixPath to string before storing in preferences
+			filepath = str(home / "Library/Application Support/libHoloPlayCore.dylib")
+		elif sys.startswith('Windows'):
+			print("Running on Windows")
+			filepath = str(home / "AppData/Roaming/LookingGlass/libHoloPlayCore.dylib")
+		elif sys.startswith('Linux'):
+			print("Running on Linux")
+			filepath = str(home / ".local/share" / lkgFolderName / "libHoloPlayCore.so")			
+			bpy.context.preferences.addons['looking_glass_tools'].preferences.filepath = filepath
+	elif not os.path.exists(fp):
+		print("Path to libHoloPlayCore is set but file cannot be found.")
+	print("Registered the live view")
 
 def unregister():
 	from bpy.utils import unregister_class
