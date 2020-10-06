@@ -97,7 +97,7 @@ class looking_glass_render_viewer(bpy.types.Panel):
 		layout = self.layout
 		layout.operator("lookingglass.render_setup", text="Create Render Setup", icon='PLUGIN')
 		layout.operator("lookingglass.window_setup", text="Open LKG Window", icon='PLUGIN')
-		layout.operator("view3d.offscreen_draw", text="Start LKG Live View", icon='PLUGIN')
+		layout.operator("view3d.offscreen_draw", text="Start/Stop Live View", icon='PLUGIN')
 
 		row = layout.row(align = True)
 		row.label(text = "LKG image to view:")
