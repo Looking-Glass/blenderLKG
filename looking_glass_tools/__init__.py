@@ -191,10 +191,12 @@ def register():
 		if sys.startswith('Darwin'):
 			print("Running on Mac OS")
 			# convert from PosixPath to string before storing in preferences
-			filepath = str(home / "Library/Application Support/libHoloPlayCore.dylib")
+			filepath = str(home / "Library/Application Support" / lkgFolderName / "libHoloPlayCore.dylib")
+			bpy.context.preferences.addons['looking_glass_tools'].preferences.filepath = filepath
 		elif sys.startswith('Windows'):
 			print("Running on Windows")
-			filepath = str(home / "AppData/Roaming/LookingGlass/libHoloPlayCore.dylib")
+			filepath = str(home / "AppData/Roaming" / lkgFolderName / "HoloPlayCore.dll")
+			bpy.context.preferences.addons['looking_glass_tools'].preferences.filepath = filepath
 		elif sys.startswith('Linux'):
 			print("Running on Linux")
 			filepath = str(home / ".local/share" / lkgFolderName / "libHoloPlayCore.so")			

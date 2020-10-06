@@ -237,7 +237,7 @@ class OffScreenDraw(bpy.types.Operator):
 					modelview_matrix, x_offsets)
 				projection_matrices = self.setup_projection_matrices(
 					projection_matrix, projection_offsets)
-			print("Computing matrices: %.6f" % (timeit.default_timer() - start_time))
+			# print("Computing matrices: %.6f" % (timeit.default_timer() - start_time))
 
 			# start_time = timeit.default_timer()
 			# render the scene total_views times from different angles and store the results in a quilt
