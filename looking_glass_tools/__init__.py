@@ -187,19 +187,20 @@ def register():
 	if fp == '':
 		home = pathlib.Path.home()
 		sys = platform.system()
-		lkgFolderName = "LookingGlass"
+		lkgFolderName = "Looking Glass Factory"
+		lkgSubFolderName= "Corelibrary"
 		if sys.startswith('Darwin'):
 			print("Running on Mac OS")
 			# convert from PosixPath to string before storing in preferences
-			filepath = str(home / "Library/Application Support" / lkgFolderName / "libHoloPlayCore.dylib")
+			filepath = str(home / "Library/Application Support" / lkgFolderName / lkgSubFolderName / "libHoloPlayCore.dylib")
 			bpy.context.preferences.addons['looking_glass_tools'].preferences.filepath = filepath
 		elif sys.startswith('Windows'):
 			print("Running on Windows")
-			filepath = str(home / "AppData/Roaming" / lkgFolderName / "HoloPlayCore.dll")
+			filepath = str(home / "AppData/Roaming" / lkgFolderName / lkgSubFolderName / "HoloPlayCore.dll")
 			bpy.context.preferences.addons['looking_glass_tools'].preferences.filepath = filepath
 		elif sys.startswith('Linux'):
 			print("Running on Linux")
-			filepath = str(home / ".local/share" / lkgFolderName / "libHoloPlayCore.so")			
+			filepath = str(home / ".local/share" / lkgFolderName / lkgSubFolderName / "libHoloPlayCore.so")			
 			bpy.context.preferences.addons['looking_glass_tools'].preferences.filepath = filepath
 	elif not os.path.exists(fp):
 		print("Path to libHoloPlayCore is set but file cannot be found.")
