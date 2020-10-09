@@ -219,12 +219,13 @@ class OffScreenDraw(bpy.types.Operator):
 				view_cone = 2.0*atan(1.0/projection_matrix[1][1])
 				view_angles = self.compute_view_angles(view_cone, total_views)
 
-				if camera_active.data.dof_object == None:
-					convergence_distance = camera_active.data.dof_distance
-				else:
-					convergence_vector = camera_active.location - \
-						camera_active.data.dof_object.location
-					convergence_distance = convergence_vector.magnitude
+				try:
+					convergence_vector = camera_active.location - camera_active.data.dof_object.location
+				except:
+					print("Active camera does not have a DoF object, using distance to World Origin instead")
+					convergence_vector = camera_active.location
+				
+				convergence_distance = convergence_vector.magnitude
 
 				size = convergence_distance * tan(view_cone * 0.5)
 
@@ -253,18 +254,8 @@ class OffScreenDraw(bpy.types.Operator):
 	def draw_callback_viewer(self, context, batch, shader):
 		''' Manages the draw handler for the multiview image viewer '''
 		scene = context.scene
-		render = scene.render
-		global hp_myQuilt
-		global qs_width
-		global qs_height
-		global qs_numViews
-
-		# should be the same aspect ratio as the looking glass display
-		aspect_ratio = render.resolution_x / render.resolution_y
 
 		if scene.LKG_image != None:
-			#scene.LKG_image.gl_load()
-			#self.draw_new(context, scene.LKG_image.bindcode, batch, shader)
 			self.draw_new(context, hp_myQuilt[0], batch, shader)
 		else:
 			print("No image selected to draw in the LKG, removing viewer")
@@ -277,18 +268,19 @@ class OffScreenDraw(bpy.types.Operator):
 
 	@staticmethod
 	def handle_add(self, context, offscreen, quilt, batch, shader):
-		''' Creates a draw handler in the 3D view and a None handler for the image editor '''
-		OffScreenDraw._handle_draw_3dview = bpy.types.SpaceView3D.draw_handler_add(
-				self.draw_callback_px, (self, context, offscreen, quilt, batch, shader),
-				'WINDOW', 'POST_PIXEL',
-				)
-		# Redraw the area stored in self.area to force update
-		self.area.tag_redraw()
-		OffScreenDraw._handle_draw_image_editor = None
-		# OffScreenDraw._handle_draw_3dview = bpy.types.SpaceView3D.draw_handler_add(
-		# 		self.draw_callback_3dview, (self, context),
-		# 		'WINDOW', 'POST_PIXEL',
-		# 		)
+		if self.area:
+			''' Creates a draw handler in the 3D view and a None handler for the image editor. When no LKG window is found it removes all LKG draw handlers. '''
+			OffScreenDraw._handle_draw_3dview = bpy.types.SpaceView3D.draw_handler_add(
+					self.draw_callback_px, (self, context, offscreen, quilt, batch, shader),
+					'WINDOW', 'POST_PIXEL',
+					)
+			# Redraw the area stored in self.area to force update
+			self.area.tag_redraw()
+			OffScreenDraw._handle_draw_image_editor = None
+		else:
+			self.report({'ERROR'}, "No Looking Glass window found. Use Open LKG Window to create one.")
+			OffScreenDraw._handle_draw_image_editor = None
+			OffScreenDraw._handle_draw_3dview = None
 
 	@staticmethod
 	def handle_add_image_editor(self, context, batch, shader):
@@ -513,13 +505,10 @@ class OffScreenDraw(bpy.types.Operator):
 		glEnableVertexAttribArray(2)
 
 		# get shader from holoplay but quilt from own setup
-		#glUseProgram(holoplay.hp_getLightfieldShader())
 		glBindVertexArray(vao_buf[0])
-		# glBindTexture(GL_TEXTURE_2D, holoplay.hp_getQuiltTexture())
 		glActiveTexture(GL_TEXTURE0)
 		glBindTexture(GL_TEXTURE_2D, texture_id)
 		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0)
-		# print("Draw method successfull")
 		glUseProgram(0)
 
 	@staticmethod
@@ -531,14 +520,6 @@ class OffScreenDraw(bpy.types.Operator):
 		glActiveTexture(GL_TEXTURE0)
 		glBindTexture(GL_TEXTURE_2D, texture_id)
 		batch.draw(shader)
-		#print(glGetError())
-		# print("Draw_new method successfull")
-
-	# operator functions
-	# @classmethod
-	# def poll(cls, context):
-	# 	''' Limit the operator to the area type specified '''
-	# 	return context.area.type == 'IMAGE_EDITOR'
 
 	def modal(self, context, event):
 		if context.area:
@@ -764,8 +745,10 @@ class looking_glass_window_setup(bpy.types.Operator):
 			area.type = 'VIEW_3D'
 			# ugly hack to identify the editor later on
 			area.spaces[0].stereo_3d_volume_alpha = 0.1
-		# disable the header because it interferes with the lenticular setup
+		# disable the header and sidebar because they interfere with the lenticular setup
 		area.spaces[0].show_region_header = False
+		area.spaces[0].show_region_ui = False # hide sidebar
+		area.spaces[0].show_region_toolbar = False
 		OffScreenDraw.area = area
 		return {'FINISHED'}
 
