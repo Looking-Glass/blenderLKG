@@ -20,7 +20,7 @@ bl_info = {
 	"name": "Looking Glass Toolset",
 	"author": "Gottfried Hofmann, Kyle Appelgate",
 	"version": (2, 0),
-	"blender": (2, 83, 0),
+	"blender": (2, 83, 6),
 	"location": "3D View > Looking Glass Tab",
 	"description": "Creates a window showing the viewport from camera view ready for the looking glass display. Builds a render-setup for offline rendering looking glass-compatible images. Allows to view images rendered for looking glass by selecting the first image of the multiview sequence.",
 	"wiki_url": "",
@@ -113,7 +113,6 @@ class looking_glass_panel(bpy.types.Panel):
 	bl_label = "Looking Glass Configuration" # display name in the interface.
 	bl_space_type = "VIEW_3D"
 	bl_region_type = "UI"
-	#bl_context = '.objectmode'
 	bl_category = "LKG"
 
 	# exposed parameters stored in WindowManager as global props so they 

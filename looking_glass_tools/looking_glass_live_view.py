@@ -31,8 +31,7 @@ from bpy.props import FloatProperty, PointerProperty
 from gpu_extras.presets import draw_texture_2d
 from gpu_extras.batch import batch_for_shader
 
-# this addon uses a newer version of the C API which does not have an installer yet so the user has to set the path in the addon preferences
-holoplay = None
+# HoloPlayCore will be loaded into this
 hp = None
 
 # some global vars we need to get rid of
@@ -45,8 +44,11 @@ qs_rows = 9
 qs_numViews = 45
 
 hp_myQuilt = None
+hp_liveQuilt = None
+hp_imgQuilt = None
 hp_FBO = None
 hp_FBO_tmp = None
+hp_FBO_img = None
 hpc_LightfieldVertShaderGLSL = None
 hpc_LightfieldFragShaderGLSL = None
 
@@ -137,11 +139,13 @@ class OffScreenDraw(bpy.types.Operator):
 		global qs_numViews
 
 		global hp_myQuilt
+		global hp_FBO
+		# global hp_liveQuilt
 
 		if hp_myQuilt == None:
-			self.setupMyQuilt()
+		 	hp_myQuilt = self.setupMyQuilt(hp_myQuilt)
 		if hp_FBO == None:
-			self.setupBuffers()
+			hp_FBO = self.setupBuffers(hp_FBO, hp_myQuilt)
 
 		with offscreen.bind():
 			for view in range(qs_numViews):
@@ -158,7 +162,7 @@ class OffScreenDraw(bpy.types.Operator):
 
 				# start_time = timeit.default_timer()
 				glReadBuffer(GL_BACK)
-				glBindTexture(GL_TEXTURE_2D, quilt)
+				glBindTexture(GL_TEXTURE_2D, hp_myQuilt[0])
 				x = int((view % qs_columns) * qs_viewWidth)
 				y = int(floor(view / qs_columns) * qs_viewHeight)
 
@@ -195,6 +199,7 @@ class OffScreenDraw(bpy.types.Operator):
 		scene = context.scene
 		render = scene.render
 		wm = context.window_manager
+		global hp_myQuilt
 
 		# TODO: super ugly hack because area spaces do not allow custom properties
 		if context.area.spaces[0].stereo_3d_volume_alpha > 0.075:
@@ -244,6 +249,7 @@ class OffScreenDraw(bpy.types.Operator):
 			# render the scene total_views times from different angles and store the results in a quilt
 			self.update_offscreens(self, context, offscreen,
 								   modelview_matrices, projection_matrices, quilt)
+			print("Rendered into texture id " + str(hp_myQuilt[0]))
 			# print("Offscreen rendering and quilt building total: %.6f" % (timeit.default_timer() - start_time))
 
 			# start_time = timeit.default_timer()
@@ -251,12 +257,12 @@ class OffScreenDraw(bpy.types.Operator):
 			# print("Draw_new total: %.6f" % (timeit.default_timer() - start_time))
 
 	@staticmethod
-	def draw_callback_viewer(self, context, batch, shader):
+	def draw_callback_viewer(self, context, quilt, batch, shader):
 		''' Manages the draw handler for the multiview image viewer '''
 		scene = context.scene
 
 		if scene.LKG_image != None:
-			self.draw_new(context, hp_myQuilt[0], batch, shader)
+			self.draw_new(context, quilt, batch, shader)
 		else:
 			print("No image selected to draw in the LKG, removing viewer")
 			self.cancel(context)
@@ -276,22 +282,28 @@ class OffScreenDraw(bpy.types.Operator):
 					)
 			# Redraw the area stored in self.area to force update
 			self.area.tag_redraw()
-			OffScreenDraw._handle_draw_image_editor = None
+			if OffScreenDraw._handle_draw_image_editor is not None:
+				print("Removing Draw Handler from Image Editor")
+				bpy.types.SpaceImageEditor.draw_handler_remove(OffScreenDraw._handle_draw_image_editor, 'WINDOW')
+				OffScreenDraw._handle_draw_image_editor = None
 		else:
 			self.report({'ERROR'}, "No Looking Glass window found. Use Open LKG Window to create one.")
 			OffScreenDraw._handle_draw_image_editor = None
 			OffScreenDraw._handle_draw_3dview = None
 
 	@staticmethod
-	def handle_add_image_editor(self, context, batch, shader):
+	def handle_add_image_editor(self, context, quilt, batch, shader):
 		''' The handler to view multiview image sequences '''
 		OffScreenDraw._handle_draw_image_editor = bpy.types.SpaceImageEditor.draw_handler_add(
-				self.draw_callback_viewer, (self, context, batch, shader),
+				self.draw_callback_viewer, (self, context, quilt, batch, shader),
 				'WINDOW', 'POST_PIXEL',
 				)
 		# Redraw the area stored in self.area to force update
 		self.area.tag_redraw()
-		OffScreenDraw._handle_draw_3dview = None
+		if OffScreenDraw._handle_draw_3dview is not None:
+				print("Removing Draw Handler from Image Editor")
+				bpy.types.SpaceView3D.draw_handler_remove(OffScreenDraw._handle_draw_3dview, 'WINDOW')
+				OffScreenDraw._handle_draw_3dview = None		
 
 	@staticmethod
 	def handle_remove():
@@ -344,14 +356,14 @@ class OffScreenDraw(bpy.types.Operator):
 		return modelview_matrix, projection_matrix
 
 	@staticmethod
-	def setupMyQuilt():
+	def setupMyQuilt(quilt):
 		''' Create Quilt Texture '''
-		global hp_myQuilt
+		#global hp_myQuilt
 		global qs_width
 		global qs_height
-		hp_myQuilt = Buffer(GL_INT, 1)
-		glGenTextures(1, hp_myQuilt)
-		glBindTexture(GL_TEXTURE_2D, hp_myQuilt[0])
+		quilt = Buffer(GL_INT, 1)
+		glGenTextures(1, quilt)
+		glBindTexture(GL_TEXTURE_2D, quilt[0])
 
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, qs_width,
 					 qs_height, 0, GL_RGB, GL_UNSIGNED_BYTE, None)
@@ -361,24 +373,27 @@ class OffScreenDraw(bpy.types.Operator):
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
 
+		return quilt
+
 	@staticmethod
-	def setupBuffers():
+	def setupBuffers(fbo, quilt):
 		''' Create Framebuffers for image_to_quilt '''
-		global hp_FBO
-		global hp_myQuilt
-		hp_FBO = Buffer(GL_INT, 1)
-		glGenFramebuffers(1, hp_FBO)
-		glBindFramebuffer(GL_FRAMEBUFFER, hp_FBO[0])
-		glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, hp_myQuilt[0], 0)
+		#global hp_FBO
+		#global hp_myQuilt
+		fbo = Buffer(GL_INT, 1)
+		glGenFramebuffers(1, fbo)
+		glBindFramebuffer(GL_FRAMEBUFFER, fbo[0])
+		glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, quilt[0], 0)
 		
 		# unbind the buffers
 		glBindFramebuffer(GL_FRAMEBUFFER, 0)
-		print("End of setup buffers")       
+		print("End of setup buffers")
+		return fbo       
 
 	@staticmethod
 	def image_to_quilt(self, context, img, view):
 		''' place an image in a quilt a the right position '''
-		scene = context.scene
+		#scene = context.scene
 
 		global qs_width
 		global qs_height
@@ -389,14 +404,18 @@ class OffScreenDraw(bpy.types.Operator):
 		global qs_numViews
 
 		global hp_myQuilt
+		global hp_imgQuilt
 		global hp_FBO
 		global hp_FBO_tmp
+		global hp_FBO_img
 
 		if hp_myQuilt == None:
-			self.setupMyQuilt()
+			hp_myQuilt = self.setupMyQuilt(hp_myQuilt)
+		if hp_imgQuilt == None:
+			hp_imgQuilt = self.setupMyQuilt(hp_imgQuilt)
 
-		if hp_FBO == None:
-			self.setupBuffers()
+		if hp_FBO_img == None:
+			hp_FBO_img = self.setupBuffers(hp_FBO_img, hp_imgQuilt)
 
 		if hp_FBO_tmp == None:
 			hp_FBO_tmp = Buffer(GL_INT, 1)
@@ -414,7 +433,7 @@ class OffScreenDraw(bpy.types.Operator):
 
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, hp_FBO_tmp[0])
 		glFramebufferTexture(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, img, 0)
-		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, hp_FBO[0])
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, hp_FBO_img[0])
 
 		x = int((view % qs_columns) * qs_viewWidth)
 		y = int(floor(view / qs_columns) * qs_viewHeight)
@@ -431,14 +450,14 @@ class OffScreenDraw(bpy.types.Operator):
 
 	@staticmethod
 	def _send_images_to_holoplay(self, context, images):
-		''' parses an array of textures and sends it to the holoplay SDK '''
+		''' parses an array of textures and sends it to the HoloPlayCore SDK '''
 		for i, image in enumerate(images):
 			print("Adding " + image.name + " to quilt.")
 			image.gl_load()
 			glActiveTexture(GL_TEXTURE0)
 			glBindTexture(GL_TEXTURE_2D, image.bindcode)
-			#holoplay.hp_copyViewToQuilt(ctypes.c_uint(i))
 			self.image_to_quilt(self, context, image.bindcode, i)
+			glBindTexture(GL_TEXTURE_2D, 0)
 
 	@staticmethod
 	def update_image(tex_id, target=GL_RGBA, texture=GL_TEXTURE0):
@@ -457,59 +476,59 @@ class OffScreenDraw(bpy.types.Operator):
 		if glIsTexture(tex_id):
 			glDeleteTextures(1, id_buf)
 
-	@staticmethod
-	def draw(context, texture_id):
-		''' Draws a rectangle '''
-		context = bpy.context
-		scene = context.scene
-		global hp_myQuilt
+	# @staticmethod
+	# def draw(context, texture_id):
+	# 	''' Draws a rectangle '''
+	# 	context = bpy.context
+	# 	scene = context.scene
+	# 	global hp_myQuilt
 
-					# positions  	#colors 		 #texture coords
-		vertices = [1.0,  1.0, 0.0,   1.0, 0.0, 0.0,   1.0, 1.0,   # top right
-					1.0, -1.0, 0.0,   0.0, 1.0, 0.0,   1.0, 0.0,   # bottom right
-					-1.0, -1.0, 0.0,   0.0, 0.0, 1.0,   0.0, 0.0,   # bottom left
-					-1.0,  1.0, 0.0,   1.0, 1.0, 0.0,   0.0, 1.0]   # top left
+	# 				# positions  	#colors 		 #texture coords
+	# 	vertices = [1.0,  1.0, 0.0,   1.0, 0.0, 0.0,   1.0, 1.0,   # top right
+	# 				1.0, -1.0, 0.0,   0.0, 1.0, 0.0,   1.0, 0.0,   # bottom right
+	# 				-1.0, -1.0, 0.0,   0.0, 0.0, 1.0,   0.0, 0.0,   # bottom left
+	# 				-1.0,  1.0, 0.0,   1.0, 1.0, 0.0,   0.0, 1.0]   # top left
 
-		indices = [0, 1, 3,  # first triangle
-					1, 2, 3]  # second triangle
+	# 	indices = [0, 1, 3,  # first triangle
+	# 				1, 2, 3]  # second triangle
 
-		verco_buf = Buffer(GL_FLOAT, len(vertices), vertices)
-		indices_buf = Buffer(GL_INT, len(indices), indices)
+	# 	verco_buf = Buffer(GL_FLOAT, len(vertices), vertices)
+	# 	indices_buf = Buffer(GL_INT, len(indices), indices)
 
-		id_buf = Buffer(GL_INT, 1)
-		vao_buf = Buffer(GL_INT, 1)
-		ebo_buf = Buffer(GL_INT, 1)
-		glGenBuffers(1, id_buf)
-		glGenBuffers(1, ebo_buf)
-		glGenVertexArrays(1, vao_buf)
-		# bind the Vertex Array Object first, then bind and set vertex buffer(s), and then configure vertex attributes(s).
-		glBindVertexArray(vao_buf[0])
+	# 	id_buf = Buffer(GL_INT, 1)
+	# 	vao_buf = Buffer(GL_INT, 1)
+	# 	ebo_buf = Buffer(GL_INT, 1)
+	# 	glGenBuffers(1, id_buf)
+	# 	glGenBuffers(1, ebo_buf)
+	# 	glGenVertexArrays(1, vao_buf)
+	# 	# bind the Vertex Array Object first, then bind and set vertex buffer(s), and then configure vertex attributes(s).
+	# 	glBindVertexArray(vao_buf[0])
 
-		glBindBuffer(GL_ARRAY_BUFFER, id_buf[0])
-		glBufferData(GL_ARRAY_BUFFER, 128, verco_buf, GL_STATIC_DRAW)
+	# 	glBindBuffer(GL_ARRAY_BUFFER, id_buf[0])
+	# 	glBufferData(GL_ARRAY_BUFFER, 128, verco_buf, GL_STATIC_DRAW)
 
-		glGenBuffers(1, ebo_buf)
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo_buf[0])
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, 48, indices_buf, GL_STATIC_DRAW)
+	# 	glGenBuffers(1, ebo_buf)
+	# 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo_buf[0])
+	# 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, 48, indices_buf, GL_STATIC_DRAW)
 
-		# position attribute
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 32, None)
-		glEnableVertexAttribArray(0)
+	# 	# position attribute
+	# 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 32, None)
+	# 	glEnableVertexAttribArray(0)
 
-		# color attribute
-		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 32, 12)
-		glEnableVertexAttribArray(1)
+	# 	# color attribute
+	# 	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 32, 12)
+	# 	glEnableVertexAttribArray(1)
 
-		# texture coordinates attribute
-		glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 32, 24)
-		glEnableVertexAttribArray(2)
+	# 	# texture coordinates attribute
+	# 	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 32, 24)
+	# 	glEnableVertexAttribArray(2)
 
-		# get shader from holoplay but quilt from own setup
-		glBindVertexArray(vao_buf[0])
-		glActiveTexture(GL_TEXTURE0)
-		glBindTexture(GL_TEXTURE_2D, texture_id)
-		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0)
-		glUseProgram(0)
+	# 	# get shader from HoloPlayCore but quilt from own setup
+	# 	glBindVertexArray(vao_buf[0])
+	# 	glActiveTexture(GL_TEXTURE0)
+	# 	glBindTexture(GL_TEXTURE_2D, texture_id)
+	# 	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0)
+	# 	glUseProgram(0)
 
 	@staticmethod
 	def draw_new(context, texture_id, batch, shader):
@@ -520,6 +539,7 @@ class OffScreenDraw(bpy.types.Operator):
 		glActiveTexture(GL_TEXTURE0)
 		glBindTexture(GL_TEXTURE_2D, texture_id)
 		batch.draw(shader)
+		glBindTexture(GL_TEXTURE_2D, 0)
 
 	def modal(self, context, event):
 		if context.area:
@@ -531,7 +551,7 @@ class OffScreenDraw(bpy.types.Operator):
 		global qs_viewWidth
 		global qs_viewHeight
 		global hp_myQuilt
-		global holoplay
+		global hp_imgQuilt
 		global hp
 		global hpc_LightfieldVertShaderGLSL
 		global hpc_LightfieldFragShaderGLSL
@@ -546,15 +566,13 @@ class OffScreenDraw(bpy.types.Operator):
 			# get the global properties from window manager
 			wm = context.window_manager
 
-			# get the location of the holoplay lib from user preferences
+			# get the location of the HoloPlayCore SDK lib from user preferences
 			hp = ctypes.cdll.LoadLibrary(bpy.context.preferences.addons['looking_glass_tools'].preferences.filepath)
-			# needs exactly the name of the addon but we are in submodle 'looking_glass_tools.looking_glass_live_view' so split at dot
-			# holoplay = ctypes.CDLL(bpy.context.preferences.addons[__name__.split('.')[0]].preferences.filepath)
 
-			# initialize holoplay plugin 
+			# initialize HoloPlayCore plugin 
 			hp.hpc_InitializeApp("SuperSimpleHoloPlayCoreSample")
 
-			# some lines to test the holoplay service after initialization:
+			# some lines to test the HoloPlayCore service after initialization:
 			hp_serviceVersion = ctypes.create_string_buffer(6)
 			hp.hpc_GetHoloPlayServiceVersion(hp_serviceVersion, 6)
 			print("HoloPlay service version: " + str(hp_serviceVersion.value))
@@ -621,12 +639,10 @@ class OffScreenDraw(bpy.types.Operator):
 			bi = hp_Bi
 
 			coords_2D = [(1, -1), (-1, -1), (-1,1), (1, 1)]
-			#shader = gpu.types.GPUShader(vertex_shader, fragment_shader)
 			hpc_LightfieldVertShaderGLSL = ctypes.c_char_p.in_dll(hp, "hpc_LightfieldVertShaderGLSLExported").value.decode("utf-8")
 			hpc_LightfieldFragShaderGLSL = ctypes.c_char_p.in_dll(hp, "hpc_LightfieldFragShaderGLSLExported").value.decode("utf-8")
 			shader = gpu.types.GPUShader(hpc_LightfieldVertShaderGLSL, hpc_LightfieldFragShaderGLSL)
 			#shader = gpu.shader.from_builtin('2D_IMAGE')
-			#batch = batch_for_shader(shader, 'TRI_FAN', {"position": coords_2D})
 			batch = batch_for_shader(shader, 'TRI_FAN', {"vertPos_data": coords_2D})
 
 			shader.bind()
@@ -661,6 +677,10 @@ class OffScreenDraw(bpy.types.Operator):
 			shader.uniform_float("quiltAspect", displayAspect)
 			shader.uniform_int("debug", debug)
 
+			# start by setting both handlers to None for later checks
+			OffScreenDraw._handle_draw_image_editor = None
+			OffScreenDraw._handle_draw_3dview = None
+
 			# when the user has loaded an image in the LKG tools panel, assume it is meant for viewing in the LKG as multiview
 			if context.scene.LKG_image != None:
 				num_multiview_images = int(wm.tilesHorizontal * wm.tilesVertical)
@@ -674,13 +694,14 @@ class OffScreenDraw(bpy.types.Operator):
 					tex = bpy.data.images.load(img_str)
 					self._LKGtexArray.append(tex)
 
+				if hp_imgQuilt == None:
+					hp_imgQuilt = self.setupMyQuilt(hp_imgQuilt)
 				self._send_images_to_holoplay(self, context, self._LKGtexArray)
-				OffScreenDraw.handle_add_image_editor(self, context, batch, shader)
+				OffScreenDraw.handle_add_image_editor(self, context, hp_imgQuilt[0], batch, shader)
 			else:
 				offscreen = self._setup_offscreens(context, 1)
-				# bufferForImage = Buffer(GL_BYTE, qs_viewWidth * qs_viewHeight * 4)
 				if hp_myQuilt == None:
-					self.setupMyQuilt()
+					hp_myQuilt = self.setupMyQuilt(hp_myQuilt)
 				OffScreenDraw.handle_add(self, context, offscreen, hp_myQuilt[0], batch, shader)
 
 			OffScreenDraw.is_enabled = True
@@ -708,8 +729,6 @@ class OffScreenDraw(bpy.types.Operator):
 				# change the render aspect ratio so the view in the looking glass does not get deformed
 				aspect_ratio = wm.screenW / wm.screenH
 				context.scene.render.resolution_x = context.scene.render.resolution_y * aspect_ratio
-
-			#print("Setting up window. Texture id of quilt: " + str(holoplay.hp_getQuiltTexture()))
 			
 			context.window_manager.modal_handler_add(self)
 			return {'RUNNING_MODAL'}

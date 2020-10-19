@@ -19,7 +19,6 @@
 import bpy
 import gpu
 import bmesh
-import json
 import subprocess
 import logging
 from bgl import *
