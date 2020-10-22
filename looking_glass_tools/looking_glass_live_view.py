@@ -140,7 +140,6 @@ class OffScreenDraw(bpy.types.Operator):
 
 		global hp_myQuilt
 		global hp_FBO
-		# global hp_liveQuilt
 
 		if hp_myQuilt == None:
 		 	hp_myQuilt = self.setupMyQuilt(hp_myQuilt)
@@ -186,7 +185,7 @@ class OffScreenDraw(bpy.types.Operator):
 	def _setup_matrices_from_existing_cameras(self, context, cam_parent):
 		modelview_matrices = []
 		projection_matrices = []
-		for cam in cam_parent.children:
+		for cam in bpy.data.collections['LKGCameraCollection'].objects:
 			modelview_matrix, projection_matrix = self._setup_matrices_from_camera(
 				context, cam)
 			modelview_matrices.append(modelview_matrix)
@@ -344,7 +343,7 @@ class OffScreenDraw(bpy.types.Operator):
 		scene = context.scene
 		render = scene.render
 
-		modelview_matrix = camera.matrix_world.inverted()
+		modelview_matrix = camera.matrix_world.normalized().inverted()
 		projection_matrix = camera.calc_matrix_camera(
 				context.evaluated_depsgraph_get(),
 				x=render.resolution_x,

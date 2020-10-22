@@ -71,7 +71,7 @@ class LookingGlassPreferences(AddonPreferences):
 
 	def draw(self, context):
 		layout = self.layout
-		layout.label(text="Please set the location of the Looking Glass Library here.")
+		layout.label(text="Please set the location of the Holoplay Core Library here. Usually this should already point to the correct path.")
 		layout.prop(self, "filepath")
 
 # ------------- The Tools Panel ----------------
@@ -80,11 +80,8 @@ class looking_glass_render_viewer(bpy.types.Panel):
 	""" Looking Glass Render Viewer """ 
 	bl_idname = "LKG_PT_panel_tools" # unique identifier for buttons and menu items to reference.
 	bl_label = "Looking Glass Tools" # display name in the interface.
-	#bl_space_type = "PROPERTIES"
 	bl_space_type = "VIEW_3D"
-	#bl_region_type = "WINDOW"
 	bl_region_type = "UI"
-	#bl_context = '.objectmode'
 	bl_category = "LKG"
 
 	bpy.types.Scene.LKG_image = bpy.props.PointerProperty(
