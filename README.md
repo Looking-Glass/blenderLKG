@@ -8,6 +8,7 @@ The version of the addon requires Blender 2.8x.
 ### Installing
 
 * If you have not done so, install the HoloPlayCore system library.
+
 * Open Blender, and go to _File → User Preferences → Add-ons → Install Add-on from file_.
 * Select the .zip and click "Install Add-on from file" on the top right.
 * Enable the addon by checking the box next to it on the left.
@@ -39,4 +40,3 @@ The blender addon portion of this project is licensed under the GPL v2 License -
 
 The HoloPlayAPI is copyright Looking Glass Factory 2018, and is licensed under the following agreement:
 [http://static-files.lookingglassfactory.com.s3.amazonaws.com/HoloPlayCAPI/License.pdf](http://static-files.lookingglassfactory.com.s3.amazonaws.com/HoloPlayCAPI/License.pdf)
-
