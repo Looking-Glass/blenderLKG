@@ -19,8 +19,8 @@
 bl_info = {
 	"name": "Looking Glass Toolset",
 	"author": "Gottfried Hofmann, Kyle Appelgate",
-	"version": (1, 7),
-	"blender": (2, 79, 0),
+	"version": (2, 0),
+	"blender": (2, 83, 6),
 	"location": "3D View > Looking Glass Tab",
 	"description": "Creates a window showing the viewport from camera view ready for the looking glass display. Builds a render-setup for offline rendering looking glass-compatible images. Allows to view images rendered for looking glass by selecting the first image of the multiview sequence.",
 	"wiki_url": "",
@@ -33,8 +33,17 @@ if "bpy" in locals():
 	importlib.reload(looking_glass_live_view)
 	importlib.reload(looking_glass_render_setup)
 else:
-	from . import looking_glass_live_view
-	from . import looking_glass_render_setup
+	from . import *
+	from . looking_glass_render_setup import *
+	from . looking_glass_live_view import *
+
+
+if "looking_glass_live_view" not in globals():
+	message = ("\n\n"
+		"The Looking Glass Toolset addon cannot be registered correctly.\n"
+		"Please try to remove and install it again.\n"
+		"If it still does not work, report it.\n")
+	raise Exception(message)
 
 import bpy
 import gpu
@@ -43,61 +52,38 @@ import subprocess
 import logging
 import os
 import platform
+import pathlib
 from bgl import *
 from math import *
 from mathutils import *
 from bpy.types import AddonPreferences, PropertyGroup
 from bpy.props import FloatProperty, PointerProperty
 
-# TODO: Make this a class method
-def set_defaults():
-	''' Returns the file path of the configuration utility shipping with the addon '''
-	script_file = os.path.realpath(__file__)
-	directory = os.path.dirname(script_file)
-	filepath = ''
-
-	if platform.system() == "Linux":
-		filepath = directory + "/c_calibration_loader_linux_x86"
-	elif platform.system() == "Windows":
-		filepath = directory + "\c_calibration_loader_win.exe"
-	elif platform.system() == "Darwin":
-		filepath = directory + "/c_calibration_loader_mac"
-	else:
-		print("Operating system not recognized, path to calibration utility nees to be set manually.")
-		return ''
-	
-	if os.path.isfile(filepath):
-		return filepath
-	else:
-		print("Could not find pre-installed calibration loader")
-		return ''
 
 class LookingGlassPreferences(AddonPreferences):
 	# this must match the addon name
 	bl_idname = __name__
 
-	filepath = bpy.props.StringProperty(
-			name="Location of the Config Extration Utility",
-			subtype='FILE_PATH',
-			default = set_defaults()
+	filepath: bpy.props.StringProperty(
+			name="Location of libHoloPlayCore",
+			subtype='FILE_PATH'
 			)
 
 	def draw(self, context):
 		layout = self.layout
+		layout.label(text="Please set the location of the Holoplay Core Library here. Usually this should already point to the correct path.")
 		layout.prop(self, "filepath")
 
 # ------------- The Tools Panel ----------------
 class looking_glass_render_viewer(bpy.types.Panel):
 		
 	""" Looking Glass Render Viewer """ 
-	bl_idname = "lookingglass.panel_tools" # unique identifier for buttons and menu items to reference.
+	bl_idname = "LKG_PT_panel_tools" # unique identifier for buttons and menu items to reference.
 	bl_label = "Looking Glass Tools" # display name in the interface.
 	bl_space_type = "VIEW_3D"
-	bl_region_type = "TOOLS"
-	bl_category = "Looking Glass"
+	bl_region_type = "UI"
+	bl_category = "LKG"
 
-	# the pointer property only works in Blender 2.79 or higher
-	# older versions will crash
 	bpy.types.Scene.LKG_image = bpy.props.PointerProperty(
 		name="LKG Image",
 		type=bpy.types.Image,
@@ -107,10 +93,11 @@ class looking_glass_render_viewer(bpy.types.Panel):
 	def draw(self, context):
 		layout = self.layout
 		layout.operator("lookingglass.render_setup", text="Create Render Setup", icon='PLUGIN')
-		layout.operator("lookingglass.window_setup", text="Create LKG Window", icon='PLUGIN')
+		layout.operator("lookingglass.window_setup", text="Open LKG Window", icon='PLUGIN')
+		layout.operator("view3d.offscreen_draw", text="Start/Stop Live View", icon='PLUGIN')
 
 		row = layout.row(align = True)
-		row.label("LKG image to view:")
+		row.label(text = "LKG image to view:")
 		row = layout.row(align = True)
 		row.template_ID(context.scene, "LKG_image", open="image.open")
 		
@@ -119,11 +106,11 @@ class looking_glass_render_viewer(bpy.types.Panel):
 class looking_glass_panel(bpy.types.Panel):
 		
 	""" Looking Glass Properties """ 
-	bl_idname = "lookingglass.panel_config" # unique identifier for buttons and menu items to reference.
+	bl_idname = "LKG_PT_panel_config" # unique identifier for buttons and menu items to reference.
 	bl_label = "Looking Glass Configuration" # display name in the interface.
 	bl_space_type = "VIEW_3D"
-	bl_region_type = "TOOLS"
-	bl_category = "Looking Glass"
+	bl_region_type = "UI"
+	bl_category = "LKG"
 
 	# exposed parameters stored in WindowManager as global props so they 
 	# can be changed even when loading the addon (due to config file parsing)
@@ -158,7 +145,6 @@ class looking_glass_panel(bpy.types.Panel):
 			)
 	bpy.types.WindowManager.tilesHorizontal = bpy.props.IntProperty(
 			name = "Horizontal Tiles",
-			# changed to 5 for hires -k
 			default = 5,
 			min = 0,
 			max = 100,
@@ -166,7 +152,6 @@ class looking_glass_panel(bpy.types.Panel):
 			)
 	bpy.types.WindowManager.tilesVertical = bpy.props.IntProperty(
 			name = "Vertical Tiles",
-			# changed to 9 for hires -k
 			default = 9,
 			min = 0,
 			max = 100,
@@ -178,14 +163,51 @@ class looking_glass_panel(bpy.types.Panel):
 		layout.prop(context.window_manager, "tilesHorizontal")
 		layout.prop(context.window_manager, "tilesVertical")
 
+classes = (
+	OffScreenDraw,
+	looking_glass_window_setup,
+	lkgRenderSetup,
+	looking_glass_panel,
+	looking_glass_render_viewer,
+	LookingGlassPreferences,
+)
+
 def register():
-	bpy.utils.register_module(__name__)
+	from bpy.utils import register_class
+	for cls in classes:
+		register_class(cls)
 	bpy.types.IMAGE_MT_view.append(looking_glass_live_view.menu_func)
-	print("registered the live view")
+	bpy.types.VIEW3D_MT_view.append(looking_glass_live_view.menu_func)
+	# set the default path to libHoloPlayCore on first registration, can be changed by the user
+	fp = bpy.context.preferences.addons['looking_glass_tools'].preferences.filepath
+	if fp == '':
+		home = pathlib.Path.home()
+		sys = platform.system()
+		lkgFolderName = "Looking Glass Factory"
+		lkgSubFolderName= "Corelibrary"
+		if sys.startswith('Darwin'):
+			print("Running on Mac OS")
+			# convert from PosixPath to string before storing in preferences
+			filepath = str(home / "Library/Application Support" / lkgFolderName / lkgSubFolderName / "libHoloPlayCore.dylib")
+			bpy.context.preferences.addons['looking_glass_tools'].preferences.filepath = filepath
+		elif sys.startswith('Windows'):
+			print("Running on Windows")
+			filepath = str(home / "AppData/Roaming" / lkgFolderName / lkgSubFolderName / "HoloPlayCore.dll")
+			bpy.context.preferences.addons['looking_glass_tools'].preferences.filepath = filepath
+		elif sys.startswith('Linux'):
+			print("Running on Linux")
+			filepath = str(home / ".local/share" / lkgFolderName / lkgSubFolderName / "libHoloPlayCore.so")			
+			bpy.context.preferences.addons['looking_glass_tools'].preferences.filepath = filepath
+	elif not os.path.exists(fp):
+		print("Path to libHoloPlayCore is set but file cannot be found.")
+	print("Registered the live view")
 
 def unregister():
-	bpy.utils.unregister_module(__name__)
+	from bpy.utils import unregister_class
+	for cls in reversed(classes):
+		unregister_class(cls)
 	bpy.types.IMAGE_MT_view.remove(looking_glass_live_view.menu_func)
+	bpy.types.VIEW3D_MT_view.remove(looking_glass_live_view.menu_func)
 
 if __name__ == "__main__":
 	register()

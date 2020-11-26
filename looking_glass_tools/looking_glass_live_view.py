@@ -18,338 +18,446 @@
 
 import bpy
 import gpu
-import json
-import subprocess
 import logging
+import time
+# import timeit # only for benchmarking
 import os
+import ctypes
 from bgl import *
 from math import *
 from mathutils import *
 from bpy.types import AddonPreferences, PropertyGroup
 from bpy.props import FloatProperty, PointerProperty
-import ctypes
+from gpu_extras.presets import draw_texture_2d
+from gpu_extras.batch import batch_for_shader
 
-# where is the addon loaded from?
-# addonFile = os.path.realpath(__file__)
-# addonDirectory = os.path.dirname(addonFile)
-# addonDirectory =  addonDirectory + '\\HoloPlayAPI'
-# holoplay = ctypes.CDLL(addonDirectory)
+# HoloPlayCore will be loaded into this
+hp = None
 
-holoplay = ctypes.CDLL("HoloPlayAPI")
+# some global vars we need to get rid of
+qs_width = 4096
+qs_height = 4096
+qs_viewWidth = 819
+qs_viewHeight = 455
+qs_columns = 5
+qs_rows = 9
+qs_numViews = 45
 
+hp_myQuilt = None
+hp_liveQuilt = None
+hp_imgQuilt = None
+hp_FBO = None
+hp_FBO_tmp = None
+hp_FBO_img = None
+hpc_LightfieldVertShaderGLSL = None
+hpc_LightfieldFragShaderGLSL = None
 
 class OffScreenDraw(bpy.types.Operator):
+	''' Manages drawing of the looking glass live view '''
 	bl_idname = "view3d.offscreen_draw"
 	bl_label = "Looking Glass Live View"
+	bl_description = "Starts and stops the LKG live view drawing."
 
-	_handle_calc = None
 	_handle_draw = None
 	_handle_draw_3dview = None
 	is_enabled = False
 	# array of texture to view multiview renders in the LGK
 	_LKGtexArray = []
-	
+
 	# store the area from where the operator is invoked
 	area = None
 
-	#dummy vars for one-time computations
-	newPitch = 0.0
-	newTilt = 0.0
-	subPixelSize = 0.0
-	redIndex = 0
-	blueIndex = 0
-	
 	@staticmethod
 	def compute_view_angles(view_cone, total_views):
 		view_angles = list()
-		
+
 		for i in range(total_views):
-			tmp_view = (((-1)*view_cone) / 2 + view_cone * (i / (total_views-1))) * (-1) #the last (-1) is to invert the order
+			# the last (-1) is to invert the order
+			tmp_view = (((-1)*view_cone) / 2 + view_cone * (i / (total_views-1))) * (-1)
 			view_angles.append(tmp_view)
-			
+
 		return view_angles
-	
+
 	@staticmethod
 	def compute_x_offsets(convergence_distance, view_angles):
 		x_offsets = list()
-		
+
 		for ang in view_angles:
 			tmp_offset = convergence_distance * tan(ang * 0.5)
 			x_offsets.append(tmp_offset)
-			
+
 		return x_offsets
-	
+
 	@staticmethod
 	def compute_projection_offsets(x_offsets, aspect_ratio, size):
 		projection_offsets = list()
-		
+
 		for off in x_offsets:
 			tmp_proj = off / (aspect_ratio * size)
 			projection_offsets.append(tmp_proj)
-			
+
 		return projection_offsets
-	
+
 	@staticmethod
 	def setup_modelview_matrices(modelview_matrix, x_offsets):
 		''' shift the camera position on the local x-axis by x_offset '''
 		modelview_matrices = list()
-		
+
 		for off in x_offsets:
-			#matrices in Blender need to be copied, otherwise it is only a link
+			# matrices in Blender need to be copied, otherwise it is only a link
 			mv_temp = modelview_matrix.copy()
 			mv_temp[0][3] += off
 			modelview_matrices.append(mv_temp)
-			
+
 		return modelview_matrices
-	
+
 	@staticmethod
 	def setup_projection_matrices(projection_matrix, projection_offsets):
 		''' the projection matrices need to be offset (similar to lens shift in Cycles) '''
 		projection_matrices = list()
-		
+
 		for off in projection_offsets:
-			#matrices in Blender need to be copied, otherwise it is only a link
+			# matrices in Blender need to be copied, otherwise it is only a link
 			proj_temp = projection_matrix.copy()
 			proj_temp[0][2] += off
 			projection_matrices.append(proj_temp)
-			
-		return projection_matrices
-	
-	@staticmethod
-	def update_offscreens(self, context, offscreens, modelview_matrices, projection_matrices):
-		''' helper method to update a whole list of offscreens '''
-		
-		# find the image editor window and create a faux context
-		for window in bpy.context.window_manager.windows:
-			screen = window.screen
-			for area in screen.areas:
-				if area.type == 'VIEW_3D':
-					for region in area.regions:
-						if region.type == 'WINDOW':
-							for space in area.spaces:
-								if space.type == 'VIEW_3D': 
-									override = {'area': area,
-									'region': region,
-									'space_data': space,
-									'scene': context.scene,
-									}
-			
-		for i in range(len(offscreens)):
-			# added i as argument to _update_offscreen_m -k
-			self._update_offscreen_m(override, offscreens[i], modelview_matrices[i], projection_matrices[i], i)
-		
 
+		return projection_matrices
+
+	@staticmethod
+	def update_offscreens(self, context, offscreen, modelview_matrices, projection_matrices, quilt):
+		''' helper method to update a whole list of offscreens '''
+
+		scene = context.scene
+
+		global qs_width
+		global qs_height
+		global qs_viewWidth
+		global qs_viewHeight
+		global qs_columns
+		global qs_rows
+		global qs_numViews
+
+		global hp_myQuilt
+		global hp_FBO
+
+		if hp_myQuilt == None:
+		 	hp_myQuilt = self.setupMyQuilt(hp_myQuilt)
+		if hp_FBO == None:
+			hp_FBO = self.setupBuffers(hp_FBO, hp_myQuilt)
+
+		with offscreen.bind():
+			for view in range(qs_numViews):
+				# start_time = timeit.default_timer()
+				offscreen.draw_view3d(
+					scene,
+					context.view_layer,
+					context.space_data,
+					context.region,
+					modelview_matrices[view],
+					projection_matrices[view],
+					)
+				# print("Offscreen rendering: %.6f" % (timeit.default_timer() - start_time))
+
+				# start_time = timeit.default_timer()
+				glReadBuffer(GL_BACK)
+				glBindTexture(GL_TEXTURE_2D, hp_myQuilt[0])
+				x = int((view % qs_columns) * qs_viewWidth)
+				y = int(floor(view / qs_columns) * qs_viewHeight)
+
+				''' glCopyTexSubImage2D works like a direct call to glReadPixels, saves one step '''
+				# glCopyTexSubImage2D(GL_TEXTURE_2D, 0, x, y, 0, 0,
+				# 					qs_viewWidth, qs_viewHeight)
+
+				''' alternate implementation using glBlitFramebuffer() '''
+				old_draw_framebuffer = Buffer(GL_INT, 1)
+				glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, old_draw_framebuffer)
+				
+				glBindFramebuffer(GL_DRAW_FRAMEBUFFER, hp_FBO[0])
+
+				glBlitFramebuffer(0, 0, qs_viewWidth, qs_viewHeight, 
+							x, y, x+qs_viewWidth, y+qs_viewHeight, 
+							GL_COLOR_BUFFER_BIT, GL_LINEAR)
+							
+				glBindFramebuffer(GL_DRAW_FRAMEBUFFER, old_draw_framebuffer[0])
+				# print("Copying to quilt: %.6f" % (timeit.default_timer() - start_time))
 
 	def _setup_matrices_from_existing_cameras(self, context, cam_parent):
 		modelview_matrices = []
 		projection_matrices = []
-		for cam in cam_parent.children:
-			modelview_matrix, projection_matrix = self._setup_matrices_from_camera(context, cam)
+		for cam in bpy.data.collections['LKGCameraCollection'].objects:
+			modelview_matrix, projection_matrix = self._setup_matrices_from_camera(
+				context, cam)
 			modelview_matrices.append(modelview_matrix)
 			projection_matrices.append(projection_matrix)
 		return modelview_matrices, projection_matrices
-		
-			
+
 	@staticmethod
-	def draw_callback_px(self, context):
-		''' Manges the draw handler for the live view '''
+	def draw_callback_px(self, context, offscreen, quilt, batch, shader):
+		''' Manages the draw handler for the live view '''
 		scene = context.scene
 		render = scene.render
 		wm = context.window_manager
+		global hp_myQuilt
 
-		#should be the same aspect ratio as the looking glass display
-		aspect_ratio = render.resolution_x / render.resolution_y
-		
-		total_views = wm.tilesHorizontal * wm.tilesVertical
+		# TODO: super ugly hack because area spaces do not allow custom properties
+		if context.area.spaces[0].stereo_3d_volume_alpha > 0.075:
+			# start_time = timeit.default_timer()
+			# should be the same aspect ratio as the looking glass display
+			aspect_ratio = render.resolution_x / render.resolution_y
 
-		#check whether multiview render setup has been created
-		cam_parent = bpy.data.objects.get("Multiview")
-		if cam_parent is not None:
-			modelview_matrices, projection_matrices = self._setup_matrices_from_existing_cameras(context, cam_parent)			
-		else:
-			camera_active = scene.camera
-			modelview_matrix, projection_matrix = self._setup_matrices_from_camera(context, camera_active)
-			
-			# compute the field of view from projection matrix directly
-			# because focal length fov in Cycles is a disc
-			view_cone = 2.0*atan( 1.0/projection_matrix[1][1] ) 	   
-			view_angles = self.compute_view_angles(view_cone, total_views)
-			
-			if camera_active.data.dof_object == None:
-				convergence_distance = camera_active.data.dof_distance
+			total_views = wm.tilesHorizontal * wm.tilesVertical
+
+			# check whether multiview render setup has been created
+			cam_parent = bpy.data.objects.get("Multiview")
+			if cam_parent is not None:
+				modelview_matrices, projection_matrices = self._setup_matrices_from_existing_cameras(
+					context, cam_parent)
 			else:
-				convergence_vector = camera_active.location - camera_active.data.dof_object.location
+				camera_active = scene.camera
+				modelview_matrix, projection_matrix = self._setup_matrices_from_camera(
+					context, camera_active)
+
+				# compute the field of view from projection matrix directly
+				# because focal length fov in Cycles is relative to the longer side of the view rectangle
+				view_cone = 2.0*atan(1.0/projection_matrix[1][1])
+				view_angles = self.compute_view_angles(view_cone, total_views)
+
+				try:
+					convergence_vector = camera_active.location - camera_active.data.dof_object.location
+				except:
+					print("Active camera does not have a DoF object, using distance to World Origin instead")
+					convergence_vector = camera_active.location
+				
 				convergence_distance = convergence_vector.magnitude
 
-			size = convergence_distance * tan(view_cone * 0.5)
-			
-			x_offsets = self.compute_x_offsets(convergence_distance, view_angles)		
-			projection_offsets = self.compute_projection_offsets(x_offsets, aspect_ratio, size)
+				size = convergence_distance * tan(view_cone * 0.5)
 
-			#create lists of matrices for modelview and projection
-			modelview_matrices = self.setup_modelview_matrices(modelview_matrix, x_offsets)
-			projection_matrices = self.setup_projection_matrices(projection_matrix, projection_offsets)
+				x_offsets = self.compute_x_offsets(convergence_distance, view_angles)
+				projection_offsets = self.compute_projection_offsets(
+					x_offsets, aspect_ratio, size)
 
-		# prepare offscreen render buffers
-		offscreens = self._setup_offscreens(context, total_views)
-		
-		# render the scene total_views times from different angles and store the results in offscreen objects
-		self.update_offscreens(self, context, offscreens, modelview_matrices, projection_matrices)		
-		
+				# create lists of matrices for modelview and projection
+				modelview_matrices = self.setup_modelview_matrices(
+					modelview_matrix, x_offsets)
+				projection_matrices = self.setup_projection_matrices(
+					projection_matrix, projection_offsets)
+			# print("Computing matrices: %.6f" % (timeit.default_timer() - start_time))
 
-		self._opengl_draw(context, offscreens, aspect_ratio, 1.0)
+			# start_time = timeit.default_timer()
+			# render the scene total_views times from different angles and store the results in a quilt
+			self.update_offscreens(self, context, offscreen,
+								   modelview_matrices, projection_matrices, quilt)
+			print("Rendered into texture id " + str(hp_myQuilt[0]))
+			# print("Offscreen rendering and quilt building total: %.6f" % (timeit.default_timer() - start_time))
+
+			# start_time = timeit.default_timer()
+			self.draw_new(context, quilt, batch, shader)
+			# print("Draw_new total: %.6f" % (timeit.default_timer() - start_time))
 
 	@staticmethod
-	def draw_callback_viewer(self, context):
-		''' Manges the draw handler for the multiview image viewer '''
+	def draw_callback_viewer(self, context, quilt, batch, shader):
+		''' Manages the draw handler for the multiview image viewer '''
 		scene = context.scene
-		render = scene.render
-
-		#should be the same aspect ratio as the looking glass display
-		aspect_ratio = render.resolution_x / render.resolution_y
 
 		if scene.LKG_image != None:
-			self._send_images_to_holoplay(self._LKGtexArray)
-			offscreens = None
-			self._opengl_draw(context, offscreens, aspect_ratio, 1.0)
+			self.draw_new(context, quilt, batch, shader)
 		else:
 			print("No image selected to draw in the LKG, removing viewer")
 			self.cancel(context)
 
-		
 	@staticmethod
 	def draw_callback_3dview(self, context):
 		''' Redraw the area stored in self.area whenever the 3D view updates '''
 		self.area.tag_redraw()
 
 	@staticmethod
-	def handle_add(self, context):
-		''' The handler in the image editor is to actually draw the lenticular image.
-			The handler in the 3D view is meant to send update triggers to the image
-			editor handler whenever the 3D view updates. '''
-		OffScreenDraw._handle_draw = bpy.types.SpaceImageEditor.draw_handler_add(
-				self.draw_callback_px, (self, context),
-				'WINDOW', 'POST_PIXEL',
-				)
-		OffScreenDraw._handle_draw_3dview = bpy.types.SpaceView3D.draw_handler_add(
-				self.draw_callback_3dview, (self, context),
-				'WINDOW', 'POST_PIXEL',
-				)
+	def handle_add(self, context, offscreen, quilt, batch, shader):
+		if self.area:
+			''' Creates a draw handler in the 3D view and a None handler for the image editor. When no LKG window is found it removes all LKG draw handlers. '''
+			OffScreenDraw._handle_draw_3dview = bpy.types.SpaceView3D.draw_handler_add(
+					self.draw_callback_px, (self, context, offscreen, quilt, batch, shader),
+					'WINDOW', 'POST_PIXEL',
+					)
+			# Redraw the area stored in self.area to force update
+			self.area.tag_redraw()
+			if OffScreenDraw._handle_draw_image_editor is not None:
+				print("Removing Draw Handler from Image Editor")
+				bpy.types.SpaceImageEditor.draw_handler_remove(OffScreenDraw._handle_draw_image_editor, 'WINDOW')
+				OffScreenDraw._handle_draw_image_editor = None
+		else:
+			self.report({'ERROR'}, "No Looking Glass window found. Use Open LKG Window to create one.")
+			OffScreenDraw._handle_draw_image_editor = None
+			OffScreenDraw._handle_draw_3dview = None
 
 	@staticmethod
-	def handle_add_viewer(self, context):
+	def handle_add_image_editor(self, context, quilt, batch, shader):
 		''' The handler to view multiview image sequences '''
-		OffScreenDraw._handle_draw = bpy.types.SpaceImageEditor.draw_handler_add(
-				self.draw_callback_viewer, (self, context),
+		OffScreenDraw._handle_draw_image_editor = bpy.types.SpaceImageEditor.draw_handler_add(
+				self.draw_callback_viewer, (self, context, quilt, batch, shader),
 				'WINDOW', 'POST_PIXEL',
 				)
+		# Redraw the area stored in self.area to force update
+		self.area.tag_redraw()
+		if OffScreenDraw._handle_draw_3dview is not None:
+				print("Removing Draw Handler from Image Editor")
+				bpy.types.SpaceView3D.draw_handler_remove(OffScreenDraw._handle_draw_3dview, 'WINDOW')
+				OffScreenDraw._handle_draw_3dview = None		
 
 	@staticmethod
 	def handle_remove():
-		if OffScreenDraw._handle_draw is not None:
-			bpy.types.SpaceImageEditor.draw_handler_remove(OffScreenDraw._handle_draw, 'WINDOW')
+		if OffScreenDraw._handle_draw_image_editor is not None:
+			print("Removing Draw Handler from Image Editor")
+			bpy.types.SpaceImageEditor.draw_handler_remove(
+				OffScreenDraw._handle_draw_image_editor, 'WINDOW')
+			OffScreenDraw._handle_draw_image_editor = None
 
-		OffScreenDraw._handle_draw = None
-		
 		if OffScreenDraw._handle_draw_3dview is not None:
-			bpy.types.SpaceView3D.draw_handler_remove(OffScreenDraw._handle_draw_3dview, 'WINDOW')
-
-		OffScreenDraw._handle_draw_3dview = None
+			print("Removing Draw Handler from 3D View")
+			# bpy.types.SpaceView3D.draw_handler_remove(OffScreenDraw._handle_draw_3dview, 'WINDOW')
+			bpy.types.SpaceView3D.draw_handler_remove(
+				OffScreenDraw._handle_draw_3dview, 'WINDOW')
+			OffScreenDraw._handle_draw_3dview = None
 
 	@staticmethod
-	def _setup_offscreens(context, num_offscreens = 1):
-		''' create off-screen buffers '''
+	def _setup_offscreens(context, num_offscreens=1):
+		''' Returns a list of num_offscreens off-screen buffers or one off-screen buffer directly '''
 		offscreens = list()
 		for i in range(num_offscreens):
 			try:
 				# edited this to be higher resolution, but it should be dynamic -k
-				# there might be a way we can make it toggleable between standard (512x256 4x8) and hires (819x455 5x9)
-				offscreen = gpu.offscreen.new(819, 455)
+				offscreen = gpu.types.GPUOffScreen(qs_viewWidth, qs_viewHeight)
 			except Exception as e:
 				print(e)
 				offscreen = None
 			offscreens.append(offscreen)
-		
-		# do not return a list when only one offscreen is set up (deprecated)	
+
+		# do not return a list when only one offscreen is set up
 		if num_offscreens == 1:
 			return offscreens[0]
 		else:
 			return offscreens
-	
+
 	@staticmethod
 	def _setup_matrices_from_camera(context, camera):
 		scene = context.scene
 		render = scene.render
-		
-		modelview_matrix = camera.matrix_world.inverted()
+
+		modelview_matrix = camera.matrix_world.normalized().inverted()
 		projection_matrix = camera.calc_matrix_camera(
-				render.resolution_x,
-				render.resolution_y,
-				render.pixel_aspect_x,
-				render.pixel_aspect_y,
+				context.evaluated_depsgraph_get(),
+				x=render.resolution_x,
+				y=render.resolution_y,
+				scale_x=render.pixel_aspect_x,
+				scale_y=render.pixel_aspect_y,
 				)
-				
+
 		return modelview_matrix, projection_matrix
-		
-	@staticmethod
-	def _update_offscreen_m(context, offscreen, modelview_matrix, projection_matrix, view):
-		''' render viewport into offscreen buffer using matrices '''
-		scene = bpy.context.scene
-
-		offscreen.draw_view3d(
-				scene,
-				context['space_data'],
-				context['region'],
-				projection_matrix,
-				modelview_matrix,
-				)
-		# added dll call to add offscreen texture to quilt -k
-		# todo: once dll is update won't have to bind texture
-		glBindTexture(GL_TEXTURE_2D, offscreen.color_texture)
-		holoplay.hp_copyViewToQuilt(ctypes.c_uint(view))
 
 	@staticmethod
-	def _send_images_to_holoplay(images):
-		''' parses an array of textures and sends it to the holoplay SDK '''
-		for i,image in enumerate(images):
-			print(image.name)
-			image.gl_load()
-			glActiveTexture(GL_TEXTURE0)
-			glBindTexture(GL_TEXTURE_2D, image.bindcode[0])
-			holoplay.hp_copyViewToQuilt(ctypes.c_uint(i))
+	def setupMyQuilt(quilt):
+		''' Create Quilt Texture '''
+		#global hp_myQuilt
+		global qs_width
+		global qs_height
+		quilt = Buffer(GL_INT, 1)
+		glGenTextures(1, quilt)
+		glBindTexture(GL_TEXTURE_2D, quilt[0])
 
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, qs_width,
+					 qs_height, 0, GL_RGB, GL_UNSIGNED_BYTE, None)
 
-	@staticmethod   		 
-	def create_image(width, height, target=GL_RGBA):
-		"""create an empty image, dimensions pow2"""
-		if target == GL_RGBA:
-			target, internal_format, dimension  = GL_RGBA, GL_RGB, 3
-		else:
-			target, internal_format, dimension = GL_DEPTH_COMPONENT32, GL_DEPTH_COMPONENT, 1
-
-		null_buffer = Buffer(GL_BYTE, [(width + 1) * (height + 1) * dimension])
-
-		id_buf = Buffer(GL_INT, 1)
-		glGenTextures(1, id_buf)
-
-		tex_id = id_buf.to_list()[0]
-		glBindTexture(GL_TEXTURE_2D, tex_id)
-
-		glTexImage2D(GL_TEXTURE_2D, 0, target, width, height, 0, internal_format, GL_UNSIGNED_BYTE, null_buffer)
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
 
-		if target == GL_DEPTH_COMPONENT32:
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_NONE)
+		return quilt
 
-		glCopyTexImage2D(GL_TEXTURE_2D, 0, target, 0, 0, width, height, 0)
-
-		glBindTexture(GL_TEXTURE_2D, 0)
-
-		del null_buffer
+	@staticmethod
+	def setupBuffers(fbo, quilt):
+		''' Create Framebuffers for image_to_quilt '''
+		#global hp_FBO
+		#global hp_myQuilt
+		fbo = Buffer(GL_INT, 1)
+		glGenFramebuffers(1, fbo)
+		glBindFramebuffer(GL_FRAMEBUFFER, fbo[0])
+		glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, quilt[0], 0)
 		
-		return tex_id
-	
+		# unbind the buffers
+		glBindFramebuffer(GL_FRAMEBUFFER, 0)
+		print("End of setup buffers")
+		return fbo       
+
+	@staticmethod
+	def image_to_quilt(self, context, img, view):
+		''' place an image in a quilt a the right position '''
+		#scene = context.scene
+
+		global qs_width
+		global qs_height
+		global qs_viewWidth
+		global qs_viewHeight
+		global qs_columns
+		global qs_rows
+		global qs_numViews
+
+		global hp_myQuilt
+		global hp_imgQuilt
+		global hp_FBO
+		global hp_FBO_tmp
+		global hp_FBO_img
+
+		if hp_myQuilt == None:
+			hp_myQuilt = self.setupMyQuilt(hp_myQuilt)
+		if hp_imgQuilt == None:
+			hp_imgQuilt = self.setupMyQuilt(hp_imgQuilt)
+
+		if hp_FBO_img == None:
+			hp_FBO_img = self.setupBuffers(hp_FBO_img, hp_imgQuilt)
+
+		if hp_FBO_tmp == None:
+			hp_FBO_tmp = Buffer(GL_INT, 1)
+			glGenFramebuffers(1, hp_FBO_tmp)
+			glBindFramebuffer(GL_FRAMEBUFFER, hp_FBO_tmp[0])
+			glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, img, 0)
+			# unbind the buffers
+			glBindFramebuffer(GL_FRAMEBUFFER, 0)
+			print("Setup of temporary framebuffer completed")       
+
+		old_read_framebuffer = Buffer(GL_INT, 1)
+		glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, old_read_framebuffer)
+		old_draw_framebuffer = Buffer(GL_INT, 1)
+		glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, old_draw_framebuffer)
+
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, hp_FBO_tmp[0])
+		glFramebufferTexture(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, img, 0)
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, hp_FBO_img[0])
+
+		x = int((view % qs_columns) * qs_viewWidth)
+		y = int(floor(view / qs_columns) * qs_viewHeight)
+
+		# glBlitFramebuffer(SourceX0, SourceY0, SourceX1, SourceY1, 
+		#               DestinationX0, DestinationY0, DestinationX1, DestinationY1, 
+		#               GL_COLOR_BUFFER_BIT, GL_LINEAR)
+		glBlitFramebuffer(0, 0, qs_viewWidth, qs_viewHeight, 
+					  x, y, x+qs_viewWidth, y+qs_viewHeight, 
+					  GL_COLOR_BUFFER_BIT, GL_LINEAR)
+
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, old_read_framebuffer[0])
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, old_draw_framebuffer[0])
+
+	@staticmethod
+	def _send_images_to_holoplay(self, context, images):
+		''' parses an array of textures and sends it to the HoloPlayCore SDK '''
+		for i, image in enumerate(images):
+			print("Adding " + image.name + " to quilt.")
+			image.gl_load()
+			glActiveTexture(GL_TEXTURE0)
+			glBindTexture(GL_TEXTURE_2D, image.bindcode)
+			self.image_to_quilt(self, context, image.bindcode, i)
+			glBindTexture(GL_TEXTURE_2D, 0)
+
 	@staticmethod
 	def update_image(tex_id, target=GL_RGBA, texture=GL_TEXTURE0):
 		"""copy the current buffer to the image"""
@@ -357,7 +465,7 @@ class OffScreenDraw(bpy.types.Operator):
 		glBindTexture(GL_TEXTURE_2D, tex_id)
 		glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 100, 10, 0, 0, 256, 128)
 		glBindTexture(GL_TEXTURE_2D, 0)
-	
+
 	@staticmethod
 	def delete_image(tex_id):
 		"""clear created image"""
@@ -367,71 +475,70 @@ class OffScreenDraw(bpy.types.Operator):
 		if glIsTexture(tex_id):
 			glDeleteTextures(1, id_buf)
 
-	def _opengl_draw(self, context, offscreens, aspect_ratio, scale):
-		''' OpenGL code to draw a rectangle in a window '''
+	# @staticmethod
+	# def draw(context, texture_id):
+	# 	''' Draws a rectangle '''
+	# 	context = bpy.context
+	# 	scene = context.scene
+	# 	global hp_myQuilt
 
-		scn = context.scene
-		wm = context.window_manager
+	# 				# positions  	#colors 		 #texture coords
+	# 	vertices = [1.0,  1.0, 0.0,   1.0, 0.0, 0.0,   1.0, 1.0,   # top right
+	# 				1.0, -1.0, 0.0,   0.0, 1.0, 0.0,   1.0, 0.0,   # bottom right
+	# 				-1.0, -1.0, 0.0,   0.0, 0.0, 1.0,   0.0, 0.0,   # bottom left
+	# 				-1.0,  1.0, 0.0,   1.0, 1.0, 0.0,   0.0, 1.0]   # top left
 
-		glDisable(GL_DEPTH_TEST)	   
+	# 	indices = [0, 1, 3,  # first triangle
+	# 				1, 2, 3]  # second triangle
 
-		# view setup
-		glMatrixMode(GL_PROJECTION)
-		glPushMatrix()
-		glLoadIdentity()
+	# 	verco_buf = Buffer(GL_FLOAT, len(vertices), vertices)
+	# 	indices_buf = Buffer(GL_INT, len(indices), indices)
 
-		glOrtho(-1, 1, -1, 1, -15, 15)
+	# 	id_buf = Buffer(GL_INT, 1)
+	# 	vao_buf = Buffer(GL_INT, 1)
+	# 	ebo_buf = Buffer(GL_INT, 1)
+	# 	glGenBuffers(1, id_buf)
+	# 	glGenBuffers(1, ebo_buf)
+	# 	glGenVertexArrays(1, vao_buf)
+	# 	# bind the Vertex Array Object first, then bind and set vertex buffer(s), and then configure vertex attributes(s).
+	# 	glBindVertexArray(vao_buf[0])
 
-		act_tex = Buffer(GL_INT, 1)
-		glGetIntegerv(GL_TEXTURE_2D, act_tex)
+	# 	glBindBuffer(GL_ARRAY_BUFFER, id_buf[0])
+	# 	glBufferData(GL_ARRAY_BUFFER, 128, verco_buf, GL_STATIC_DRAW)
 
-		viewport = Buffer(GL_INT, 4)
-		glGetIntegerv(GL_VIEWPORT, viewport)
+	# 	glGenBuffers(1, ebo_buf)
+	# 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo_buf[0])
+	# 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, 48, indices_buf, GL_STATIC_DRAW)
 
-		width = floor(wm.screenW)
-		height = floor(wm.screenH)
-		
-		glViewport(viewport[0], viewport[1], width, height)
-		glScissor(viewport[0], viewport[1], width, height)
-		
-		# modified this line to use dll shader -k
-		glUseProgram(holoplay.hp_getLightfieldShader())
-		glBindTexture(GL_TEXTURE_2D, holoplay.hp_getQuiltTexture())
+	# 	# position attribute
+	# 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 32, None)
+	# 	glEnableVertexAttribArray(0)
 
-		texco = [(1, 1), (0, 1), (0, 0), (1, 0)]
-		verco = [(1.0, 1.0), (-1.0, 1.0), (-1.0, -1.0), (1.0, -1.0)]
+	# 	# color attribute
+	# 	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 32, 12)
+	# 	glEnableVertexAttribArray(1)
 
-		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
+	# 	# texture coordinates attribute
+	# 	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 32, 24)
+	# 	glEnableVertexAttribArray(2)
 
-		glColor4f(1.0, 1.0, 1.0, 1.0)   	
+	# 	# get shader from HoloPlayCore but quilt from own setup
+	# 	glBindVertexArray(vao_buf[0])
+	# 	glActiveTexture(GL_TEXTURE0)
+	# 	glBindTexture(GL_TEXTURE_2D, texture_id)
+	# 	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0)
+	# 	glUseProgram(0)
 
-		glBegin(GL_QUADS)
-		for i in range(4):
-			glTexCoord3f(texco[i][0], texco[i][1], 0.0)
-			glVertex2f(verco[i][0], verco[i][1])
-		glEnd() 	  
+	@staticmethod
+	def draw_new(context, texture_id, batch, shader):
+		''' Draws a rectangle '''
+		context = bpy.context
+		scene = context.scene
 
-		# restoring settings
-		glBindTexture(GL_TEXTURE_2D, act_tex[0])
-
-		glDisable(GL_TEXTURE_2D)
-
-		# reset view
-		glMatrixMode(GL_PROJECTION)
-		glPopMatrix()
-
-		glMatrixMode(GL_MODELVIEW)
-		glPopMatrix()
-
-		glViewport(viewport[0], viewport[1], viewport[2], viewport[3])
-		glScissor(viewport[0], viewport[1], viewport[2], viewport[3])
-		glUseProgram(0)
-
-	# operator functions
-	@classmethod
-	def poll(cls, context):
-		''' Limit the operator to the area type specified '''
-		return context.area.type == 'IMAGE_EDITOR'
+		glActiveTexture(GL_TEXTURE0)
+		glBindTexture(GL_TEXTURE_2D, texture_id)
+		batch.draw(shader)
+		glBindTexture(GL_TEXTURE_2D, 0)
 
 	def modal(self, context, event):
 		if context.area:
@@ -440,20 +547,144 @@ class OffScreenDraw(bpy.types.Operator):
 		return {'PASS_THROUGH'}
 
 	def invoke(self, context, event):
+		global qs_viewWidth
+		global qs_viewHeight
+		global hp_myQuilt
+		global hp_imgQuilt
+		global hp
+		global hpc_LightfieldVertShaderGLSL
+		global hpc_LightfieldFragShaderGLSL
+
 		if OffScreenDraw.is_enabled:
+			print("Stopping drawing of Looking Glass Live View")
 			self.cancel(context)
 
 			return {'FINISHED'}
 
 		else:
 			# get the global properties from window manager
-			wm = context.window_manager	
+			wm = context.window_manager
+
+			# get the location of the HoloPlayCore SDK lib from user preferences
+			hp = ctypes.cdll.LoadLibrary(bpy.context.preferences.addons['looking_glass_tools'].preferences.filepath)
+
+			# initialize HoloPlayCore plugin 
+			hp.hpc_InitializeApp("SuperSimpleHoloPlayCoreSample")
+
+			# some lines to test the HoloPlayCore service after initialization:
+			hp_serviceVersion = ctypes.create_string_buffer(6)
+			hp.hpc_GetHoloPlayServiceVersion(hp_serviceVersion, 6)
+			print("HoloPlay service version: " + str(hp_serviceVersion.value))
+
+			hp_coreVersion = ctypes.create_string_buffer(6)
+			hp.hpc_GetHoloPlayCoreVersion(hp_coreVersion, 6)
+			print("HoloPlay core version: " + str(hp_coreVersion.value))
+
+			hp_numDevices = hp.hpc_GetNumDevices()
+			print("Number of devices found: " + str(hp_numDevices))
+
+			# currently this only supports the first connected LKG device TODO: support multiple devices
+			i = ctypes.c_int(0)
+
+			hp_deviceType = ctypes.create_string_buffer(1000)
+			hp.hpc_GetDeviceType(i, hp_deviceType, 1000)
+			print("Device type: " + str(hp_deviceType.value))
+
+			hp_winX = hp.hpc_GetDevicePropertyWinX(i)
+			hp_winY = hp.hpc_GetDevicePropertyWinY(i)
+			print("Position: " + str(hp_winX) + ", " + str(hp_winY))
+			hp_screenW = hp.hpc_GetDevicePropertyScreenW(i)
+			hp_screenH = hp.hpc_GetDevicePropertyScreenH(i)
+			print("Size: " + str(hp_screenW) + ", " + str(hp_screenH))
+
+			hp.hpc_GetDevicePropertyDisplayAspect.restype = ctypes.c_float
+			hp_displayAspect = hp.hpc_GetDevicePropertyDisplayAspect(i)
+			print("Aspect Ratio: " + str(hp_displayAspect))
+
+			hp.hpc_GetDevicePropertyPitch.restype = ctypes.c_float
+			hp_pitch = hp.hpc_GetDevicePropertyPitch(i)
+			print("Pitch: " + str(hp_pitch))
+
+			hp.hpc_GetDevicePropertyTilt.restype = ctypes.c_float
+			hp_tilt = hp.hpc_GetDevicePropertyTilt(i)
+			print("Tilt: " + str(hp_tilt))
+
+			hp.hpc_GetDevicePropertyCenter.restype = ctypes.c_float
+			hp_center = hp.hpc_GetDevicePropertyCenter(i)
+			print("Center: " + str(hp_center))
+
+			hp.hpc_GetDevicePropertySubp.restype = ctypes.c_float
+			hp_subP =  hp.hpc_GetDevicePropertySubp(i)
+			print("subp: " + str(hp_subP))
+
+			hp.hpc_GetDevicePropertyFringe.restype = ctypes.c_float
+			hp_fringe = hp.hpc_GetDevicePropertyFringe(i)
+			print("fringe: " + str(hp_fringe))
+
+			# the following all return int
+			hp_Ri = hp.hpc_GetDevicePropertyRi(i)
+			hp_Bi = hp.hpc_GetDevicePropertyBi(i)
+			hp_invView = hp.hpc_GetDevicePropertyInvView(i)
+			print(" RI: " + str(hp_Ri) + " BI: " + str(hp_Bi) + " invView: " + str(hp_invView))
+			
+			# TODO: Refactor			
+			pitch = hp_pitch
+			tilt = hp_tilt
+			center = hp_center
+			invView = hp_invView
+			subp = hp_subP
+			displayAspect = hp_displayAspect
+			ri = hp_Ri
+			bi = hp_Bi
+
+			coords_2D = [(1, -1), (-1, -1), (-1,1), (1, 1)]
+			hpc_LightfieldVertShaderGLSL = ctypes.c_char_p.in_dll(hp, "hpc_LightfieldVertShaderGLSLExported").value.decode("utf-8")
+			hpc_LightfieldFragShaderGLSL = ctypes.c_char_p.in_dll(hp, "hpc_LightfieldFragShaderGLSLExported").value.decode("utf-8")
+			shader = gpu.types.GPUShader(hpc_LightfieldVertShaderGLSL, hpc_LightfieldFragShaderGLSL)
+			#shader = gpu.shader.from_builtin('2D_IMAGE')
+			batch = batch_for_shader(shader, 'TRI_FAN', {"vertPos_data": coords_2D})
+
+			shader.bind()
+			#shader.uniform_float("brightness", 0.5)
+			shader.uniform_float("pitch", pitch)
+			shader.uniform_float("tilt", tilt)
+			shader.uniform_float("center", center)
+			shader.uniform_int("invView", invView)
+			shader.uniform_float("subp", subp)
+			shader.uniform_float("displayAspect", displayAspect)
+			shader.uniform_int("ri", ri)
+			shader.uniform_int("bi", bi)
+			
+			# quilt settings, put somewhere else
+			qs_width = 4096
+			qs_height = 4096
+			qs_columns = 5
+			qs_rows = 9
+			qs_totalViews = 45
+			overscan = 0
+			quiltInvert = 0
+			debug = 0
+			
+			qs_viewWidth = int(qs_width / qs_columns)
+			qs_viewHeight = int(qs_height / qs_rows)
+			
+			shader.uniform_float("tile", (qs_columns, qs_rows, qs_totalViews))
+			shader.uniform_float("viewPortion", (qs_viewWidth * qs_columns / float(qs_width),
+									   qs_viewHeight * qs_rows / float(qs_height)))
+			shader.uniform_int("overscan", overscan)
+			shader.uniform_int("quiltInvert", quiltInvert)
+			shader.uniform_float("quiltAspect", displayAspect)
+			shader.uniform_int("debug", debug)
+
+			# start by setting both handlers to None for later checks
+			OffScreenDraw._handle_draw_image_editor = None
+			OffScreenDraw._handle_draw_3dview = None
 
 			# when the user has loaded an image in the LKG tools panel, assume it is meant for viewing in the LKG as multiview
 			if context.scene.LKG_image != None:
 				num_multiview_images = int(wm.tilesHorizontal * wm.tilesVertical)
 				multiview_first_image_path = context.scene.LKG_image.filepath
-				#split into file, view number and extension
+				# split into file, view number and extension
 				multiview_image_path_split = multiview_first_image_path.rsplit('.',2)
 				self._LKGtexArray = []
 
@@ -462,9 +693,15 @@ class OffScreenDraw(bpy.types.Operator):
 					tex = bpy.data.images.load(img_str)
 					self._LKGtexArray.append(tex)
 
-				OffScreenDraw.handle_add_viewer(self, context)
+				if hp_imgQuilt == None:
+					hp_imgQuilt = self.setupMyQuilt(hp_imgQuilt)
+				self._send_images_to_holoplay(self, context, self._LKGtexArray)
+				OffScreenDraw.handle_add_image_editor(self, context, hp_imgQuilt[0], batch, shader)
 			else:
-				OffScreenDraw.handle_add(self, context)
+				offscreen = self._setup_offscreens(context, 1)
+				if hp_myQuilt == None:
+					hp_myQuilt = self.setupMyQuilt(hp_myQuilt)
+				OffScreenDraw.handle_add(self, context, offscreen, hp_myQuilt[0], batch, shader)
 
 			OffScreenDraw.is_enabled = True
 
@@ -472,38 +709,38 @@ class OffScreenDraw(bpy.types.Operator):
 				# store the editor window from where the operator whas invoked
 				context.area.tag_redraw()
 			
-			scn = context.scene
-
-			# initialize holoplay plugin -k
-			holoplay.hp_initialize()
+			scn = context.scene			
 
 			# the focal distance of the active camera is used as focal plane
 			# thus it should not be 0 because then the system won't work
 			try:
 				cam = context.scene.camera
-				if cam.data.dof_distance == 0.0:
+				if cam.data.dof.focus_distance == 0.0:
 					# using distance of the camera to the center of the scene as educated guess
 					# for the initial distance of the focal plane
-					cam.data.dof_distance = cam.location.magnitude
+					cam.data.dof.focus_distance = cam.location.magnitude
 			except:
 				print("Need an active camera in the scene")
 
-			#check whether multiview render setup has been created
+			# check whether multiview render setup has been created
 			cam_parent = bpy.data.objects.get("Multiview")
 			if cam_parent is None:
 				# change the render aspect ratio so the view in the looking glass does not get deformed
 				aspect_ratio = wm.screenW / wm.screenH
 				context.scene.render.resolution_x = context.scene.render.resolution_y * aspect_ratio
-
+			
 			context.window_manager.modal_handler_add(self)
 			return {'RUNNING_MODAL'}
 
 	def cancel(self, context):
 		OffScreenDraw.handle_remove()
 		OffScreenDraw.is_enabled = False
+		hp.hpc_CloseApp()
 
 		if context.area:
 			context.area.tag_redraw()
+
+		print("Cancel finished")
 
 # ------------ UI Functions -------------
 class looking_glass_window_setup(bpy.types.Operator):
@@ -513,43 +750,24 @@ class looking_glass_window_setup(bpy.types.Operator):
 	bl_description = "Creates a new window of type image editor that can be used in the looking glass display."
 	bl_options = {'REGISTER', 'UNDO'}
 
-	@staticmethod
-	def load_calibration():
-		user_preferences = bpy.context.user_preferences
-		filepath = user_preferences.addons["looking_glass_tools"].preferences.filepath
-		print(filepath)
-		try:
-			config_json_raw = subprocess.run([filepath], stdout=subprocess.PIPE)
-			config_json_text = config_json_raw.stdout.decode('UTF-8')
-			config_json = json.loads(config_json_text)
-			print("Loading of config success, center: " + str(config_json['center']['value']))
-			wm = bpy.context.window_manager
-			wm.pitch = float(config_json['pitch']['value'])
-			wm.slope = float(config_json['slope']['value'])
-			wm.center = float(config_json['center']['value'])
-			wm.invView = float(config_json['invView']['value'])
-			wm.DPI = float(config_json['DPI']['value'])
-			wm.screenW = float(config_json['screenW']['value'])
-			wm.screenH = float(config_json['screenH']['value'])
-			wm.flipImageX = float(config_json['flipImageX']['value'])
-			wm.flipImageY = float(config_json['flipImageY']['value'])
-			wm.flipSubp = float(config_json['flipSubp']['value'])
-
-		except:
-			print("Loading of config failed. Check file path of config utility in the addon preferences.")
-
-
-
 	def execute(self, context):
 		# Call user prefs window
 		bpy.ops.screen.area_dupli('INVOKE_DEFAULT')
 
 		# Change area type
 		area = bpy.context.window_manager.windows[-1].screen.areas[0]
-		area.type = 'IMAGE_EDITOR'
+		# when the user has loaded an image in the LKG tools panel, assume it is meant for viewing in the LKG as multiview
+		if context.scene.LKG_image != None:
+			area.type = 'IMAGE_EDITOR'
+		else:
+			area.type = 'VIEW_3D'
+			# ugly hack to identify the editor later on
+			area.spaces[0].stereo_3d_volume_alpha = 0.1
+		# disable the header and sidebar because they interfere with the lenticular setup
+		area.spaces[0].show_region_header = False
+		area.spaces[0].show_region_ui = False # hide sidebar
+		area.spaces[0].show_region_toolbar = False
 		OffScreenDraw.area = area
-		self.load_calibration()
-		print("Loaded Calibration")
 		return {'FINISHED'}
 
 def menu_func(self, context):
@@ -563,7 +781,7 @@ def register():
 
 def unregister():
 	bpy.utils.unregister_class(looking_glass_window_setup)
-	bpy.utils.register_class(OffScreenDraw)
+	bpy.utils.unregister_class(OffScreenDraw)
 	bpy.types.IMAGE_MT_view.remove(menu_func)
 
 if __name__ == "__main__":

@@ -19,7 +19,6 @@
 import bpy
 import gpu
 import bmesh
-import json
 import subprocess
 import logging
 from bgl import *
@@ -29,23 +28,29 @@ from bpy.types import AddonPreferences, PropertyGroup
 from bpy.props import FloatProperty, PointerProperty
 from bpy.app.handlers import persistent
 
-@persistent
-def fix_clipping_planes_pre(self):
-	''' Fixed weird behaviour of Blender when rendering by adjusting the clipping distances of the LKG cameras by the local scale of the Multiview object '''
-	currentMultiview = bpy.data.objects.get("Multiview")
-	for ob in currentMultiview.children:
-		scale_factor = currentMultiview.matrix_local.to_scale().z
-		ob.data.clip_start *= scale_factor
-		ob.data.clip_end *= scale_factor
+# @persistent
+# def fix_clipping_planes_pre(self):
+# 	''' Fixed weird behaviour of Blender when rendering by adjusting the clipping distances of the LKG cameras by the local scale of the Multiview object '''
+# 	global fov
+# 	currentMultiview = bpy.data.objects.get("Multiview")
+# 	scale_factor = currentMultiview.matrix_local.to_scale().z
+# 	clip_delta = 0.01
+# 	camLocZ = currentMultiview.scale[0] / tan(0.5 * radians(fov))
+	
+# 	#	cam.data.clip_start = camLocZ - 1.0 + clip_delta
+# 	#	cam.data.clip_end = camLocZ + 1.0 - clip_delta
+# 	for ob in currentMultiview.children:		
+# 		ob.data.clip_start = camLocZ - 1.0*scale_factor + clip_delta
+# 		ob.data.clip_end = camLocZ + 1.0*scale_factor - clip_delta
 
-@persistent
-def fix_clipping_planes_post(self):
-	''' Reverse the effects of fix_clipping_planes_post '''
-	currentMultiview = bpy.data.objects.get("Multiview")
-	for ob in currentMultiview.children:
-		scale_factor = currentMultiview.matrix_local.to_scale().z
-		ob.data.clip_start /= scale_factor
-		ob.data.clip_end /= scale_factor
+# @persistent
+# def fix_clipping_planes_post(self):
+# 	''' Reverse the effects of fix_clipping_planes_post '''
+# 	currentMultiview = bpy.data.objects.get("Multiview")
+# 	for ob in currentMultiview.children:
+# 		scale_factor = currentMultiview.matrix_local.to_scale().z
+# 		ob.data.clip_start *= scale_factor
+# 		ob.data.clip_end /= scale_factor
 
 class lkgRenderSetup(bpy.types.Operator):
 	bl_idname = "lookingglass.render_setup"
@@ -84,7 +89,7 @@ class lkgRenderSetup(bpy.types.Operator):
 		# Create object
 		currentMultiview = bpy.data.objects.new("Multiview", me)
 		currentMultiview.show_name = True
-		scn.objects.link(currentMultiview)
+		scn.collection.objects.link(currentMultiview)
 
 		# Get a BMesh representation
 		bm = bmesh.new()   # create an empty BMesh
@@ -136,7 +141,6 @@ class lkgRenderSetup(bpy.types.Operator):
 		
 	def get_vertical_fov_from_camera(self, cam):
 		''' returns the vertical field of view of the camera '''
-		wm = bpy.context.window_manager
 		render = bpy.context.scene.render
 		projection_matrix = cam.calc_matrix_camera(render.resolution_x, render.resolution_y, render.pixel_aspect_x, render.pixel_aspect_y)
 		fov_vertical = 2.0*atan( 1.0/projection_matrix[1][1] )
@@ -144,11 +148,10 @@ class lkgRenderSetup(bpy.types.Operator):
 
 	@staticmethod
 	def calculate_camera_distance_z(fov):
-		#global fov
 		global currentMultiview
 		camLocZ = currentMultiview.scale[0] / tan(0.5 * radians(fov))
 		return camLocZ
-	
+
 	def makeCamera(self, i):
 		''' Create Camera '''
 		self.log.info("Creating Camera")
@@ -158,8 +161,8 @@ class lkgRenderSetup(bpy.types.Operator):
 		viewCone = wm.viewCone
 		
 		bpy.ops.object.camera_add(
-			view_align=False,
 			enter_editmode=False,
+			align='WORLD',
 			location=(0, 0, 0),
 			rotation=(0,0,0)
 		)
@@ -171,10 +174,14 @@ class lkgRenderSetup(bpy.types.Operator):
 
 		#* parent it to current multi view
 		global currentMultiview
-		currentMultiview.select = True
-		bpy.context.scene.objects.active = currentMultiview
-		#bpy.ops.object.parent_set(type='OBJECT', keep_transform=True)
+		currentMultiview.select_set(True)
+		bpy.context.view_layer.objects.active = currentMultiview
 		self.setParentTrans(cam, currentMultiview)
+		# const = cam.constraints.new('CHILD_OF')
+		# const.target=currentMultiview
+		# const.inverse_matrix = currentMultiview.matrix_world.inverted()
+
+
 
 		# cam distance
 		#camLocZ = currentMultiview.scale[0] / tan(0.5 * fov_rad)
@@ -197,18 +204,37 @@ class lkgRenderSetup(bpy.types.Operator):
 		cam.data.clip_start = camLocZ - 1.0 + clip_delta
 		cam.data.clip_end = camLocZ + 1.0 - clip_delta
 
+		# drivers to keep camera clipping distances in bounds of Multiview object when it gets scaled TODO: De-duplicate
+		driver = cam.data.driver_add('clip_start').driver
+		var = driver.variables.new()
+		var.name = 'z_scale'
+		var.targets[0].id = currentMultiview
+		var.targets[0].data_path = 'scale.z'
+		driver.expression = 'z_scale / tan(0.5 * radians(' + str(fov) + ')) - z_scale + ' + str(clip_delta) + '*z_scale'
+
+		driver = cam.data.driver_add('clip_end').driver
+		var = driver.variables.new()
+		var.name = 'z_scale'
+		var.targets[0].id = currentMultiview
+		var.targets[0].data_path = 'scale.z'
+		driver.expression = 'z_scale / tan(0.5 * radians(' + str(fov) + ')) + z_scale - ' + str(clip_delta) + '*z_scale'
+
 		#* set up view
 		bpy.ops.scene.render_view_add()
 		newView = bpy.context.scene.render.views.active
 		newView.name = 'view.' + str(i).zfill(2)
 		newView.camera_suffix = '.' + str(i).zfill(2)
 
-		#cam should be invisible in the viewport because otherwise a line will appear in the LKG
-		cam.hide = True
+		# the cameras will be invisible in the viewport but for debugging it is nice to see the limits directly when turning one on
+		cam.data.show_limits = True
+
+		# cam should be invisible in the viewport because otherwise a line will appear in the LKG
+		# for 2.8 we need to use hide_set(True) because hide_viewport will globally disable it in viewports, temporarily breaking the child-parent-relationship
+		cam.hide_set(True)
 
 		return cam
 
-	def makeAllCameras(self):
+	def makeAllCameras(self, camCollection):
 		self.log.info("Make all cameras")
 		wm = bpy.context.window_manager
 		numViews = wm.tilesHorizontal * wm.tilesVertical
@@ -217,6 +243,7 @@ class lkgRenderSetup(bpy.types.Operator):
 		for i in range(0, numViews):
 			cam = self.makeCamera(i)
 			allCameras.append(cam)
+			camCollection.objects.link(cam)
 		return allCameras
 
 	def setupMultiView(self):
@@ -255,14 +282,17 @@ class lkgRenderSetup(bpy.types.Operator):
 		bpy.ops.ed.undo_push()
 		self.setupMultiView()
 		self.makeMultiview(context)
-		allCameras = self.makeAllCameras()
+		# create an own collection for the camera objects
+		camCollection = bpy.data.collections.new("LKGCameraCollection")
+		context.scene.collection.children.link(camCollection)
+		allCameras = self.makeAllCameras(camCollection)
 		#* need to set the scene camera otherwise it won't render by code?
 		# for a meaningful view set the middle camera active
 		numCams = len(allCameras)
 		context.scene.camera = allCameras[int(floor(numCams/2))]
 		self.setRenderSettings(context)
-		bpy.app.handlers.render_pre.append(fix_clipping_planes_pre)
-		bpy.app.handlers.render_post.append(fix_clipping_planes_post)
+		#bpy.app.handlers.render_pre.append(fix_clipping_planes_pre)
+		#bpy.app.handlers.render_post.append(fix_clipping_planes_post)
 		return {'FINISHED'}
 
 def register():
