@@ -474,61 +474,6 @@ class OffScreenDraw(bpy.types.Operator):
 
 		if glIsTexture(tex_id):
 			glDeleteTextures(1, id_buf)
-
-	# @staticmethod
-	# def draw(context, texture_id):
-	# 	''' Draws a rectangle '''
-	# 	context = bpy.context
-	# 	scene = context.scene
-	# 	global hp_myQuilt
-
-	# 				# positions  	#colors 		 #texture coords
-	# 	vertices = [1.0,  1.0, 0.0,   1.0, 0.0, 0.0,   1.0, 1.0,   # top right
-	# 				1.0, -1.0, 0.0,   0.0, 1.0, 0.0,   1.0, 0.0,   # bottom right
-	# 				-1.0, -1.0, 0.0,   0.0, 0.0, 1.0,   0.0, 0.0,   # bottom left
-	# 				-1.0,  1.0, 0.0,   1.0, 1.0, 0.0,   0.0, 1.0]   # top left
-
-	# 	indices = [0, 1, 3,  # first triangle
-	# 				1, 2, 3]  # second triangle
-
-	# 	verco_buf = Buffer(GL_FLOAT, len(vertices), vertices)
-	# 	indices_buf = Buffer(GL_INT, len(indices), indices)
-
-	# 	id_buf = Buffer(GL_INT, 1)
-	# 	vao_buf = Buffer(GL_INT, 1)
-	# 	ebo_buf = Buffer(GL_INT, 1)
-	# 	glGenBuffers(1, id_buf)
-	# 	glGenBuffers(1, ebo_buf)
-	# 	glGenVertexArrays(1, vao_buf)
-	# 	# bind the Vertex Array Object first, then bind and set vertex buffer(s), and then configure vertex attributes(s).
-	# 	glBindVertexArray(vao_buf[0])
-
-	# 	glBindBuffer(GL_ARRAY_BUFFER, id_buf[0])
-	# 	glBufferData(GL_ARRAY_BUFFER, 128, verco_buf, GL_STATIC_DRAW)
-
-	# 	glGenBuffers(1, ebo_buf)
-	# 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo_buf[0])
-	# 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, 48, indices_buf, GL_STATIC_DRAW)
-
-	# 	# position attribute
-	# 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 32, None)
-	# 	glEnableVertexAttribArray(0)
-
-	# 	# color attribute
-	# 	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 32, 12)
-	# 	glEnableVertexAttribArray(1)
-
-	# 	# texture coordinates attribute
-	# 	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 32, 24)
-	# 	glEnableVertexAttribArray(2)
-
-	# 	# get shader from HoloPlayCore but quilt from own setup
-	# 	glBindVertexArray(vao_buf[0])
-	# 	glActiveTexture(GL_TEXTURE0)
-	# 	glBindTexture(GL_TEXTURE_2D, texture_id)
-	# 	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0)
-	# 	glUseProgram(0)
-
 	@staticmethod
 	def draw_new(context, texture_id, batch, shader):
 		''' Draws a rectangle '''
@@ -566,10 +511,11 @@ class OffScreenDraw(bpy.types.Operator):
 			wm = context.window_manager
 
 			# get the location of the HoloPlayCore SDK lib from user preferences
-			hp = ctypes.cdll.LoadLibrary(bpy.context.preferences.addons['looking_glass_tools'].preferences.filepath)
+			#hp = ctypes.cdll.LoadLibrary(bpy.context.preferences.addons['looking_glass_tools'].preferences.filepath)
+			hp = wm.hp
 
 			# initialize HoloPlayCore plugin 
-			hp.hpc_InitializeApp("SuperSimpleHoloPlayCoreSample")
+			#hp.hpc_InitializeApp("SuperSimpleHoloPlayCoreSample")
 
 			# some lines to test the HoloPlayCore service after initialization:
 			hp_serviceVersion = ctypes.create_string_buffer(6)
@@ -735,7 +681,7 @@ class OffScreenDraw(bpy.types.Operator):
 	def cancel(self, context):
 		OffScreenDraw.handle_remove()
 		OffScreenDraw.is_enabled = False
-		hp.hpc_CloseApp()
+		#hp.hpc_CloseApp()
 
 		if context.area:
 			context.area.tag_redraw()

@@ -53,6 +53,7 @@ import logging
 import os
 import platform
 import pathlib
+import ctypes
 from bgl import *
 from math import *
 from mathutils import *
@@ -200,7 +201,11 @@ def register():
 			bpy.context.preferences.addons['looking_glass_tools'].preferences.filepath = filepath
 	elif not os.path.exists(fp):
 		print("Path to libHoloPlayCore is set but file cannot be found.")
-	print("Registered the live view")
+	else:
+		hp = ctypes.cdll.LoadLibrary(fp)
+		hp.hpc_InitializeApp("LKGBlenderAddon")
+		bpy.types.WindowManager.hp = hp
+		print("Registered the live view")
 
 def unregister():
 	from bpy.utils import unregister_class
@@ -208,6 +213,7 @@ def unregister():
 		unregister_class(cls)
 	bpy.types.IMAGE_MT_view.remove(looking_glass_live_view.menu_func)
 	bpy.types.VIEW3D_MT_view.remove(looking_glass_live_view.menu_func)
+	bpy.context.window_manager.hp.hpc_CloseApp()
 
 if __name__ == "__main__":
 	register()

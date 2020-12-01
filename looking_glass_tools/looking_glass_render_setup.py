@@ -21,36 +21,13 @@ import gpu
 import bmesh
 import subprocess
 import logging
+import ctypes
 from bgl import *
 from math import *
 from mathutils import *
 from bpy.types import AddonPreferences, PropertyGroup
 from bpy.props import FloatProperty, PointerProperty
 from bpy.app.handlers import persistent
-
-# @persistent
-# def fix_clipping_planes_pre(self):
-# 	''' Fixed weird behaviour of Blender when rendering by adjusting the clipping distances of the LKG cameras by the local scale of the Multiview object '''
-# 	global fov
-# 	currentMultiview = bpy.data.objects.get("Multiview")
-# 	scale_factor = currentMultiview.matrix_local.to_scale().z
-# 	clip_delta = 0.01
-# 	camLocZ = currentMultiview.scale[0] / tan(0.5 * radians(fov))
-	
-# 	#	cam.data.clip_start = camLocZ - 1.0 + clip_delta
-# 	#	cam.data.clip_end = camLocZ + 1.0 - clip_delta
-# 	for ob in currentMultiview.children:		
-# 		ob.data.clip_start = camLocZ - 1.0*scale_factor + clip_delta
-# 		ob.data.clip_end = camLocZ + 1.0*scale_factor - clip_delta
-
-# @persistent
-# def fix_clipping_planes_post(self):
-# 	''' Reverse the effects of fix_clipping_planes_post '''
-# 	currentMultiview = bpy.data.objects.get("Multiview")
-# 	for ob in currentMultiview.children:
-# 		scale_factor = currentMultiview.matrix_local.to_scale().z
-# 		ob.data.clip_start *= scale_factor
-# 		ob.data.clip_end /= scale_factor
 
 class lkgRenderSetup(bpy.types.Operator):
 	bl_idname = "lookingglass.render_setup"
@@ -177,11 +154,6 @@ class lkgRenderSetup(bpy.types.Operator):
 		currentMultiview.select_set(True)
 		bpy.context.view_layer.objects.active = currentMultiview
 		self.setParentTrans(cam, currentMultiview)
-		# const = cam.constraints.new('CHILD_OF')
-		# const.target=currentMultiview
-		# const.inverse_matrix = currentMultiview.matrix_world.inverted()
-
-
 
 		# cam distance
 		#camLocZ = currentMultiview.scale[0] / tan(0.5 * fov_rad)
@@ -260,6 +232,10 @@ class lkgRenderSetup(bpy.types.Operator):
 		''' Set render size depending on LKG configuration. This overwrites previous settings! '''
 		wm = context.window_manager
 		render = context.scene.render
+		# currently this only supports the first connected LKG device TODO: support multiple devices
+		i = ctypes.c_int(0)
+		wm.hp.hpc_GetDevicePropertyDisplayAspect.restype = ctypes.c_float
+		hp_displayAspect = wm.hp.hpc_GetDevicePropertyDisplayAspect(i)
 		if wm.tilesHorizontal == 5 and wm.tilesVertical == 9:
 			render.resolution_x = 819
 			render.resolution_y = 455
@@ -270,6 +246,13 @@ class lkgRenderSetup(bpy.types.Operator):
 			render.resolution_y = 256
 			render.pixel_aspect_x = 1.0
 			render.pixel_aspect_y = 1.25
+		resolution_aspect = render.resolution_x/render.resolution_y
+		if hp_displayAspect < 1.0:
+			render.pixel_aspect_x = resolution_aspect / hp_displayAspect
+			render.pixel_aspect_y = 1.0
+		else:
+			render.pixel_aspect_x = 1.0
+			render.pixel_aspect_y = resolution_aspect / hp_displayAspect
 		#only make changes when one of the supported configs is set
 
 
@@ -291,8 +274,6 @@ class lkgRenderSetup(bpy.types.Operator):
 		numCams = len(allCameras)
 		context.scene.camera = allCameras[int(floor(numCams/2))]
 		self.setRenderSettings(context)
-		#bpy.app.handlers.render_pre.append(fix_clipping_planes_pre)
-		#bpy.app.handlers.render_post.append(fix_clipping_planes_post)
 		return {'FINISHED'}
 
 def register():
