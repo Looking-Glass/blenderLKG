@@ -236,23 +236,26 @@ class lkgRenderSetup(bpy.types.Operator):
 		i = ctypes.c_int(0)
 		wm.hp.hpc_GetDevicePropertyDisplayAspect.restype = ctypes.c_float
 		hp_displayAspect = wm.hp.hpc_GetDevicePropertyDisplayAspect(i)
+		print("Display aspect ratio: " + str(hp_displayAspect))
 		if wm.tilesHorizontal == 5 and wm.tilesVertical == 9:
 			render.resolution_x = 819
 			render.resolution_y = 455
-			render.pixel_aspect_x = 1.0
-			render.pixel_aspect_y = 1.125
+			#render.pixel_aspect_x = 1.0
+			#render.pixel_aspect_y = 1.125
 		elif wm.tilesHorizontal == 4 and wm.tilesVertical == 8:
 			render.resolution_x = 512
 			render.resolution_y = 256
-			render.pixel_aspect_x = 1.0
-			render.pixel_aspect_y = 1.25
+			#render.pixel_aspect_x = 1.0
+			#render.pixel_aspect_y = 1.25
 		resolution_aspect = render.resolution_x/render.resolution_y
 		if hp_displayAspect < 1.0:
-			render.pixel_aspect_x = resolution_aspect / hp_displayAspect
-			render.pixel_aspect_y = 1.0
-		else:
 			render.pixel_aspect_x = 1.0
 			render.pixel_aspect_y = resolution_aspect / hp_displayAspect
+		elif hp_displayAspect > 1.0:
+			render.pixel_aspect_x = 1.0
+			render.pixel_aspect_y = resolution_aspect / hp_displayAspect
+		else:
+			print("Aspect ratio of display either square not undefined")
 		#only make changes when one of the supported configs is set
 
 
