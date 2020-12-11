@@ -40,7 +40,6 @@ The version of the addon requires Blender 2.83 or Blender 2.90.
 
 ## License
 
-The blender addon portion of this project is licensed under the GPL v2 License - see the [LICENSE](LICENSE) file for details.
+The Blender addon portion of this project is licensed under the GPL v2 License - see the [LICENSE](LICENSE) file for details.
 
-The HoloPlayAPI is copyright Looking Glass Factory 2018, and is licensed under the following agreement:
-[http://static-files.lookingglassfactory.com.s3.amazonaws.com/HoloPlayCAPI/License.pdf](http://static-files.lookingglassfactory.com.s3.amazonaws.com/HoloPlayCAPI/License.pdf)
+The HoloPlay Core dyamic libraries are copyright Looking Glass Factory, and are licensed under [this agreement](https://s3.amazonaws.com/static-files.lookingglassfactory.com/HoloPlayCore/HoloPlayCoreLicense.txt).
