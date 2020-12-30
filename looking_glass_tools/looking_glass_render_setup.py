@@ -21,7 +21,6 @@ import gpu
 import bmesh
 import subprocess
 import logging
-import ctypes
 from bgl import *
 from math import *
 from mathutils import *
@@ -154,6 +153,11 @@ class lkgRenderSetup(bpy.types.Operator):
 		currentMultiview.select_set(True)
 		bpy.context.view_layer.objects.active = currentMultiview
 		self.setParentTrans(cam, currentMultiview)
+		# const = cam.constraints.new('CHILD_OF')
+		# const.target=currentMultiview
+		# const.inverse_matrix = currentMultiview.matrix_world.inverted()
+
+
 
 		# cam distance
 		#camLocZ = currentMultiview.scale[0] / tan(0.5 * fov_rad)
@@ -232,30 +236,16 @@ class lkgRenderSetup(bpy.types.Operator):
 		''' Set render size depending on LKG configuration. This overwrites previous settings! '''
 		wm = context.window_manager
 		render = context.scene.render
-		# currently this only supports the first connected LKG device TODO: support multiple devices
-		i = ctypes.c_int(0)
-		wm.hp.hpc_GetDevicePropertyDisplayAspect.restype = ctypes.c_float
-		hp_displayAspect = wm.hp.hpc_GetDevicePropertyDisplayAspect(i)
-		print("Display aspect ratio: " + str(hp_displayAspect))
 		if wm.tilesHorizontal == 5 and wm.tilesVertical == 9:
 			render.resolution_x = 819
 			render.resolution_y = 455
-			#render.pixel_aspect_x = 1.0
-			#render.pixel_aspect_y = 1.125
+			render.pixel_aspect_x = 1.0
+			render.pixel_aspect_y = 1.125
 		elif wm.tilesHorizontal == 4 and wm.tilesVertical == 8:
 			render.resolution_x = 512
 			render.resolution_y = 256
-			#render.pixel_aspect_x = 1.0
-			#render.pixel_aspect_y = 1.25
-		resolution_aspect = render.resolution_x/render.resolution_y
-		if hp_displayAspect < 1.0:
 			render.pixel_aspect_x = 1.0
-			render.pixel_aspect_y = resolution_aspect / hp_displayAspect
-		elif hp_displayAspect > 1.0:
-			render.pixel_aspect_x = 1.0
-			render.pixel_aspect_y = resolution_aspect / hp_displayAspect
-		else:
-			print("Aspect ratio of display either square not undefined")
+			render.pixel_aspect_y = 1.25
 		#only make changes when one of the supported configs is set
 
 

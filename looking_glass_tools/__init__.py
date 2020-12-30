@@ -32,10 +32,12 @@ if "bpy" in locals():
 	import importlib
 	importlib.reload(looking_glass_live_view)
 	importlib.reload(looking_glass_render_setup)
+	importlib.reload(looking_glass_settings)
 else:
 	from . import *
 	from . looking_glass_render_setup import *
 	from . looking_glass_live_view import *
+	from . looking_glass_settings import *
 
 
 if "looking_glass_live_view" not in globals():
@@ -60,6 +62,8 @@ from mathutils import *
 from bpy.types import AddonPreferences, PropertyGroup
 from bpy.props import FloatProperty, PointerProperty
 
+# global var to store the holoplay core instance
+hp = None
 
 class LookingGlassPreferences(AddonPreferences):
 	# this must match the addon name
@@ -94,8 +98,8 @@ class looking_glass_render_viewer(bpy.types.Panel):
 	def draw(self, context):
 		layout = self.layout
 		layout.operator("lookingglass.render_setup", text="Create Render Setup", icon='PLUGIN')
-		layout.operator("lookingglass.window_setup", text="Open LKG Window", icon='PLUGIN')
-		layout.operator("view3d.offscreen_draw", text="Start/Stop Live View", icon='PLUGIN')
+		layout.operator("lookingglass.window_setup", text="Open LKG Window", icon='WINDOW')
+		layout.operator("view3d.offscreen_draw", text="Start/Stop Live View", icon='CAMERA_STEREO')
 
 		row = layout.row(align = True)
 		row.label(text = "LKG image to view:")
@@ -108,7 +112,7 @@ class looking_glass_panel(bpy.types.Panel):
 		
 	""" Looking Glass Properties """ 
 	bl_idname = "LKG_PT_panel_config" # unique identifier for buttons and menu items to reference.
-	bl_label = "Looking Glass Configuration" # display name in the interface.
+	bl_label = "Looking Glass Properties" # display name in the interface.
 	bl_space_type = "VIEW_3D"
 	bl_region_type = "UI"
 	bl_category = "LKG"
@@ -158,11 +162,26 @@ class looking_glass_panel(bpy.types.Panel):
 			max = 100,
 			description = "How many views to store horizontally",
 			)
+	bpy.types.WindowManager.numDevicesConnected = bpy.props.IntProperty(
+			name = "Connected Devices",
+			default = 0,
+			min = 0,
+			max = 100,
+			description = "How many looking glass devices have been discovered by HoloPlay Service.",
+			)
+	bpy.types.WindowManager.wm = None
 
 	def draw(self, context):
+		wm = context.window_manager
 		layout = self.layout
-		layout.prop(context.window_manager, "tilesHorizontal")
-		layout.prop(context.window_manager, "tilesVertical")
+		if wm.numDevicesConnected < 1:
+			text="No connected LKG devices found."
+			layout.label(text=text, icon='ERROR')
+		else:
+			text = "Found " + str(wm.numDevicesConnected) + " connected LKG devices."
+			layout.label(text=text, icon='CAMERA_STEREO')		
+	# 	layout.prop(context.window_manager, "tilesHorizontal")
+	# 	layout.prop(context.window_manager, "tilesVertical")
 
 classes = (
 	OffScreenDraw,
@@ -174,6 +193,7 @@ classes = (
 )
 
 def register():
+	global hp
 	from bpy.utils import register_class
 	for cls in classes:
 		register_class(cls)
@@ -201,19 +221,25 @@ def register():
 			bpy.context.preferences.addons['looking_glass_tools'].preferences.filepath = filepath
 	elif not os.path.exists(fp):
 		print("Path to libHoloPlayCore is set but file cannot be found.")
-	else:
-		hp = ctypes.cdll.LoadLibrary(fp)
-		hp.hpc_InitializeApp("LKGBlenderAddon")
-		bpy.types.WindowManager.hp = hp
-		print("Registered the live view")
+		# get the location of the HoloPlayCore SDK lib from user preferences
+	
+	# run and initialize holoplay core
+	looking_glass_settings.init()
+	
+	wm = bpy.context.window_manager
+	hp = looking_glass_settings.hp
+
+	wm.numDevicesConnected = looking_glass_settings.numDevices
+
+	print("Registered the live view")
 
 def unregister():
+	looking_glass_settings.hp.hpc_CloseApp()
 	from bpy.utils import unregister_class
 	for cls in reversed(classes):
 		unregister_class(cls)
 	bpy.types.IMAGE_MT_view.remove(looking_glass_live_view.menu_func)
 	bpy.types.VIEW3D_MT_view.remove(looking_glass_live_view.menu_func)
-	bpy.context.window_manager.hp.hpc_CloseApp()
 
 if __name__ == "__main__":
 	register()
