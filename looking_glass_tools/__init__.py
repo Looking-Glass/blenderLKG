@@ -64,13 +64,29 @@ from bpy.props import FloatProperty, PointerProperty
 # global var to store the holoplay core instance
 hp = None
 
+def filepath_listener(self, context):
+	''' Function to run when the file path of the Holoplay Core library is changed by the user in the addon preferences '''
+	global hp
+	print("Running filepath update")
+	try:			
+		# run and initialize holoplay core
+		looking_glass_settings.init()
+		
+		wm = bpy.context.window_manager
+		hp = looking_glass_settings.hp
+
+		wm.numDevicesConnected = looking_glass_settings.numDevices
+	except:
+		print("Loading of Holoplay Core library failed. Is the path set correctly?")
+
 class LookingGlassPreferences(AddonPreferences):
 	# this must match the addon name
 	bl_idname = __name__
 	
 	filepath: bpy.props.StringProperty(
 			name="Location of libHoloPlayCore",
-			subtype='FILE_PATH'
+			subtype='FILE_PATH',
+			update=filepath_listener
 			)
 
 	def draw(self, context):
