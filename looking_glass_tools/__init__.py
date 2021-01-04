@@ -39,7 +39,6 @@ else:
 	from . looking_glass_live_view import *
 	from . looking_glass_settings import *
 
-
 if "looking_glass_live_view" not in globals():
 	message = ("\n\n"
 		"The Looking Glass Toolset addon cannot be registered correctly.\n"
@@ -68,15 +67,22 @@ hp = None
 class LookingGlassPreferences(AddonPreferences):
 	# this must match the addon name
 	bl_idname = __name__
-
+	
 	filepath: bpy.props.StringProperty(
 			name="Location of libHoloPlayCore",
 			subtype='FILE_PATH'
 			)
 
 	def draw(self, context):
+		global hp
 		layout = self.layout
-		layout.label(text="Please set the location of the Holoplay Core Library here. Usually this should already point to the correct path.")
+		if hp != None:
+			text = "Please set the location of the Holoplay Core Library here. Usually this should already point to the correct path."
+			icon = 'INFO'
+		else:
+			text = "Loading of Holoplay Core library failed. Please set it's location below, save or close the preferences and restart Blender."
+			icon = 'ERROR'
+		layout.label(text=text, icon=icon)
 		layout.prop(self, "filepath")
 
 # ------------- The Tools Panel ----------------
@@ -223,18 +229,24 @@ def register():
 		print("Path to libHoloPlayCore is set but file cannot be found.")
 		# get the location of the HoloPlayCore SDK lib from user preferences
 	
-	# run and initialize holoplay core
-	looking_glass_settings.init()
-	
-	wm = bpy.context.window_manager
-	hp = looking_glass_settings.hp
+	try:			
+		# run and initialize holoplay core
+		looking_glass_settings.init()
+		
+		wm = bpy.context.window_manager
+		hp = looking_glass_settings.hp
 
-	wm.numDevicesConnected = looking_glass_settings.numDevices
+		wm.numDevicesConnected = looking_glass_settings.numDevices
+	except:
+		print("Loading of Holoplay Core library failed. Is the path set correctly?")
 
 	print("Registered the live view")
 
 def unregister():
-	looking_glass_settings.hp.hpc_CloseApp()
+	try:
+		looking_glass_settings.hp.hpc_CloseApp()
+	except:
+		print("Closing of the Holoplay Core App failed.")
 	from bpy.utils import unregister_class
 	for cls in reversed(classes):
 		unregister_class(cls)
