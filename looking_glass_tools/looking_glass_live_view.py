@@ -126,7 +126,7 @@ class OffScreenDraw(bpy.types.Operator):
 		return projection_matrices
 
 	@staticmethod
-	def update_offscreens(self, context, offscreen, modelview_matrices, projection_matrices, quilt):
+	def update_offscreens(self, context, offscreens, modelview_matrices, projection_matrices, quilt):
 		''' helper method to update a whole list of offscreens '''
 
 		scene = context.scene
@@ -147,8 +147,8 @@ class OffScreenDraw(bpy.types.Operator):
 		if hp_FBO == None:
 			hp_FBO = self.setupBuffers(hp_FBO, hp_myQuilt)
 
-		with offscreen.bind():
-			for view in range(qs_numViews):
+		for view, offscreen in enumerate(offscreens):
+			with offscreen.bind():
 				# start_time = timeit.default_timer()
 				offscreen.draw_view3d(
 					scene,
@@ -159,7 +159,10 @@ class OffScreenDraw(bpy.types.Operator):
 					projection_matrices[view],
 					)
 				# print("Offscreen rendering: %.6f" % (timeit.default_timer() - start_time))
-
+		
+		# this is a workaround for https://developer.blender.org/T84402
+		for view, offscreen in enumerate(offscreens):
+			with offscreen.bind():
 				# start_time = timeit.default_timer()
 				glReadBuffer(GL_BACK)
 				glBindTexture(GL_TEXTURE_2D, hp_myQuilt[0])
@@ -194,7 +197,7 @@ class OffScreenDraw(bpy.types.Operator):
 		return modelview_matrices, projection_matrices
 
 	@staticmethod
-	def draw_callback_px(self, context, offscreen, quilt, batch, shader):
+	def draw_callback_px(self, context, offscreens, quilt, batch, shader):
 		''' Manages the draw handler for the live view '''
 		scene = context.scene
 		render = scene.render
@@ -204,7 +207,7 @@ class OffScreenDraw(bpy.types.Operator):
 		# TODO: super ugly hack because area spaces do not allow custom properties
 		if context.area.spaces[0].stereo_3d_volume_alpha > 0.075:
 			# in case we have an image loaded, offscreen is False and we can draw the content of the quilt directly.
-			if offscreen == False:
+			if offscreens == False:
 				self.draw_new(context, quilt, batch, shader)
 			else:
 				# start_time = timeit.default_timer()
@@ -251,7 +254,7 @@ class OffScreenDraw(bpy.types.Operator):
 
 				# start_time = timeit.default_timer()
 				# render the scene total_views times from different angles and store the results in a quilt
-				self.update_offscreens(self, context, offscreen,
+				self.update_offscreens(self, context, offscreens,
 									modelview_matrices, projection_matrices, quilt)
 				print("Rendered into texture id " + str(hp_myQuilt[0]))
 				# print("Offscreen rendering and quilt building total: %.6f" % (timeit.default_timer() - start_time))
@@ -266,11 +269,11 @@ class OffScreenDraw(bpy.types.Operator):
 		self.area.tag_redraw()
 
 	@staticmethod
-	def handle_add(self, context, offscreen, quilt, batch, shader):
+	def handle_add(self, context, offscreens, quilt, batch, shader):
 		if self.area:
 			''' Creates a draw handler in the 3D view and a None handler for the image editor. When no LKG window is found it removes all LKG draw handlers. '''
 			OffScreenDraw._handle_draw_3dview = bpy.types.SpaceView3D.draw_handler_add(
-					self.draw_callback_px, (self, context, offscreen, quilt, batch, shader),
+					self.draw_callback_px, (self, context, offscreens, quilt, batch, shader),
 					'WINDOW', 'POST_PIXEL',
 					)
 			# Redraw the area stored in self.area to force update
@@ -681,13 +684,13 @@ class OffScreenDraw(bpy.types.Operator):
 				if hp_imgQuilt == None:
 					hp_imgQuilt = self.setupMyQuilt(hp_imgQuilt)
 				self._send_images_to_holoplay(self, context, self._LKGtexArray, LKG_image)
-				offscreen = False # this is to indicate to the draw handler that it should not use offscreen rendering but draw the images directly
-				OffScreenDraw.handle_add(self, context, offscreen, hp_imgQuilt[0], batch, shader)
+				offscreens = False # this is to indicate to the draw handler that it should not use offscreen rendering but draw the images directly
+				OffScreenDraw.handle_add(self, context, offscreens, hp_imgQuilt[0], batch, shader)
 			else:
-				offscreen = self._setup_offscreens(context, 1)
+				offscreens = self._setup_offscreens(context, qs_totalViews)
 				if hp_myQuilt == None:
 					hp_myQuilt = self.setupMyQuilt(hp_myQuilt)
-				OffScreenDraw.handle_add(self, context, offscreen, hp_myQuilt[0], batch, shader)
+				OffScreenDraw.handle_add(self, context, offscreens, hp_myQuilt[0], batch, shader)
 
 			OffScreenDraw.is_enabled = True
 
