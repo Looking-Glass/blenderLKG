@@ -21,12 +21,14 @@ import gpu
 import bmesh
 import subprocess
 import logging
+import ctypes
 from bgl import *
 from math import *
 from mathutils import *
 from bpy.types import AddonPreferences, PropertyGroup
 from bpy.props import FloatProperty, PointerProperty
 from bpy.app.handlers import persistent
+from . import looking_glass_settings
 
 class lkgRenderSetup(bpy.types.Operator):
 	bl_idname = "lookingglass.render_setup"
@@ -47,7 +49,7 @@ class lkgRenderSetup(bpy.types.Operator):
 		childOb.matrix_parent_inverse = parentOb.matrix_world.inverted()
 		return True
 
-	def makeMultiview(self, context):
+	def makeMultiview(self, context, hp_displayAspect):
 		''' Create a parent object for the multiview cameras that also indicates the view space of the LKG '''
 		self.log.info("Making Multiview")
 
@@ -58,6 +60,7 @@ class lkgRenderSetup(bpy.types.Operator):
 		scn = context.scene
 		global currentMultiview
 		global fov
+		global hp
 
 		# Create mesh 
 		me = bpy.data.meshes.new('Multiview') 
@@ -106,11 +109,11 @@ class lkgRenderSetup(bpy.types.Operator):
 		bmesh.ops.scale(bm, vec=(scale_factor_back, scale_factor_back, 1.0), space=currentMultiview.matrix_local, verts=bm_verts_back)
 
 		# the aspect ratio should match the one of the LKG device
-		wm = bpy.context.window_manager
-		aspectRatio = wm.screenH / wm.screenW
+		#wm = bpy.context.window_manager
+		#aspectRatio = wm.screenH / wm.screenW
 
-		bmesh.ops.scale(bm, vec=(1.0, aspectRatio, 1.0), space=currentMultiview.matrix_local, verts=bm_verts_front)
-		bmesh.ops.scale(bm, vec=(1.0, aspectRatio, 1.0), space=currentMultiview.matrix_local, verts=bm_verts_back)
+		bmesh.ops.scale(bm, vec=(1.0, 1/hp_displayAspect, 1.0), space=currentMultiview.matrix_local, verts=bm_verts_front)
+		bmesh.ops.scale(bm, vec=(1.0, 1/hp_displayAspect, 1.0), space=currentMultiview.matrix_local, verts=bm_verts_back)
 
 		# Finish up, write the bmesh back to the mesh
 		bm.to_mesh(me)
@@ -232,10 +235,12 @@ class lkgRenderSetup(bpy.types.Operator):
 			render.views["right"].use = False
 		render.views_format = 'MULTIVIEW'
 
-	def setRenderSettings(self, context):
+	def setRenderSettings(self, context, hp_displayAspect):
 		''' Set render size depending on LKG configuration. This overwrites previous settings! '''
+		global hp
 		wm = context.window_manager
 		render = context.scene.render
+
 		if wm.tilesHorizontal == 5 and wm.tilesVertical == 9:
 			render.resolution_x = 819
 			render.resolution_y = 455
@@ -246,10 +251,24 @@ class lkgRenderSetup(bpy.types.Operator):
 			render.resolution_y = 256
 			render.pixel_aspect_x = 1.0
 			render.pixel_aspect_y = 1.25
-		#only make changes when one of the supported configs is set
+
+		resolution_aspect = render.resolution_x/render.resolution_y
+
+		if hp_displayAspect < 1.0:
+			render.pixel_aspect_x = 1.0
+			render.pixel_aspect_y = resolution_aspect / hp_displayAspect
+		else:
+			render.pixel_aspect_x = 1.0
+			render.pixel_aspect_y = resolution_aspect / hp_displayAspect
 
 
 	def execute(self, context):
+		global hp
+		# holoplay core is loaded as global var in looking_glass_settings.py
+		hp = looking_glass_settings.hp
+		i = ctypes.c_int(0)
+		hp.hpc_GetDevicePropertyDisplayAspect.restype = ctypes.c_float
+		hp_displayAspect = hp.hpc_GetDevicePropertyDisplayAspect(i)
 		# the fov of the Blender camera is relative to the broader side
 		# at an aspect ratio of 16:10 a fov of 14° translates to ~22.23 degrees
 		global fov
@@ -257,7 +276,7 @@ class lkgRenderSetup(bpy.types.Operator):
 		# TODO: find a better way, this here is tricky
 		bpy.ops.ed.undo_push()
 		self.setupMultiView()
-		self.makeMultiview(context)
+		self.makeMultiview(context, hp_displayAspect)
 		# create an own collection for the camera objects
 		camCollection = bpy.data.collections.new("LKGCameraCollection")
 		context.scene.collection.children.link(camCollection)
@@ -266,7 +285,7 @@ class lkgRenderSetup(bpy.types.Operator):
 		# for a meaningful view set the middle camera active
 		numCams = len(allCameras)
 		context.scene.camera = allCameras[int(floor(numCams/2))]
-		self.setRenderSettings(context)
+		self.setRenderSettings(context, hp_displayAspect)
 		return {'FINISHED'}
 
 def register():
