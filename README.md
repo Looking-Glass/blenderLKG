@@ -36,5 +36,3 @@ The version of the addon requires at least Blender 2.92.
 ## License
 
 The Blender addon portion of this project is licensed under the GPL v2 License - see the [LICENSE](LICENSE) file for details.
-
-The HoloPlay Core dyamic libraries are copyright Looking Glass Factory, and are licensed under [this agreement](https://s3.amazonaws.com/static-files.lookingglassfactory.com/HoloPlayCore/HoloPlayCoreLicense.txt).
