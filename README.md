@@ -1,30 +1,24 @@
-*Last updated: November 26, 2020*
-*Version: 2.0*
+*Last updated: April 23, 2021*
+*Version: 3.0*
 
 This Getting Started Guide is for the Blender Add-on created specifically for use with the Looking Glass. It features live-display of the camera view in the image editor, an automatic render-setup for Cycles and the option to view rendered multi-view image sequences in the Looking Glass.
 
-The version of the addon requires Blender 2.83 or Blender 2.90.
+The version of the addon requires at least Blender 2.92.
 
 ### Installing
 
-* If you have not done so, install the HoloPlayCore system library.
+* If you have not done so, install HoloPlayService.
 
 * Open Blender, and go to _File → User Preferences → Add-ons → Install Add-on from file_.
 * Select the .zip and click "Install Add-on from file" on the top right.
 * Enable the addon by checking the box next to it on the left.
-* Click on the triangle to open up the addon preferences.
-    * The HoloPlayCore library should already be set there. In that case everything is fine.
-    * If not, click on the file browser icon.
-    * Locate HoloPlayCore.dll and click accept.
 * Click "Save User Settings" to keep the addon enabled.
 
 ### Usage
 
 * The main UI can be found in the _Sidebar → LKG Tab_.
 * **Create Render Setup** will place 45 (invisible) cameras parented to an object that represents the frustum into the scene. The frustum determines what is visible inside the Looking Glass after render. The cameras are parented to the frustum so move, rotate and scale the frumstum to place the cameras in the scene. The setup created uses the Blender multiview system.
-* **Create LKG Window** opens up a detached window with 3D viewport or image editor ready, depending wether an image is loaded in the _LKG image to view_ field. Next place the window in the Looking Glass and make it fullscreen. Since Blender 2.8x does not have a default shortcut for _Toggle Window Fullscreen_ anymore we suggest setting a shortcut for it.
-    * Make sure you are using extended mode in Windows display settings to use the live preview!
-* **Start/Stop Live View** will start or stop rendering your content for the Looking Glass.
+* **Send Quilt** will show the current frame of the viewport or the rendering open in the image selector in the Looking Glass.
 
 ### Rendering and saving
 * Rendering works using the multiview system in Blender so you can render with F12 or render animations with CTRL+F12. The only difference to regular rendering is that Blender will store 45 images to disk for every frame rendered. Each of those images corresponds to one view of the 45 cameras.
@@ -36,7 +30,8 @@ The version of the addon requires Blender 2.83 or Blender 2.90.
 ## Authors
 
 * **Gottfried Hofmann** 
-* **Kyle Appelgate** 
+* **Kyle Appelgate**
+* **Evan Kahn** 
 
 ## License
 

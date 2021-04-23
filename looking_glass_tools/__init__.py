@@ -19,8 +19,8 @@
 bl_info = {
 	"name": "Looking Glass Toolset",
 	"author": "Gottfried Hofmann, Kyle Appelgate, Evan Kahn",
-	"version": (2, 0),
-	"blender": (2, 83, 6),
+	"version": (3, 0),
+	"blender": (2, 92, 0),
 	"location": "3D View > Looking Glass Tab",
 	"description": "Creates a window showing the viewport from camera view ready for the looking glass display. Builds a render-setup for offline rendering looking glass-compatible images. Allows to view images rendered for looking glass by selecting the first image of the multiview sequence.",
 	"wiki_url": "",
@@ -65,43 +65,6 @@ from bpy.props import FloatProperty, PointerProperty
 
 # global var to store the holoplay core instance
 hp = None
-
-def filepath_listener(self, context):
-	''' Function to run when the file path of the Holoplay Core library is changed by the user in the addon preferences '''
-	global hp
-	print("Running filepath update")
-	try:			
-		# run and initialize holoplay core
-		looking_glass_settings.init()
-		
-		wm = bpy.context.window_manager
-		hp = looking_glass_settings.hp
-
-		wm.numDevicesConnected = looking_glass_settings.numDevices
-	except:
-		print("Loading of Holoplay Core library failed. Is the path set correctly?")
-
-class LookingGlassPreferences(AddonPreferences):
-	# this must match the addon name
-	bl_idname = __name__
-	
-	filepath: bpy.props.StringProperty(
-			name="Location of libHoloPlayCore",
-			subtype='FILE_PATH',
-			update=filepath_listener
-			)
-
-	def draw(self, context):
-		global hp
-		layout = self.layout
-		if hp != None:
-			text = "Please set the location of the Holoplay Core Library here. Usually this should already point to the correct path."
-			icon = 'INFO'
-		else:
-			text = "Loading of Holoplay Core library failed. Please set it's location below, save or close the preferences and restart Blender."
-			icon = 'ERROR'
-		layout.label(text=text, icon=icon)
-		layout.prop(self, "filepath")
 
 # ------------- The Tools Panel ----------------
 class looking_glass_render_viewer(bpy.types.Panel):
@@ -210,9 +173,7 @@ class looking_glass_panel(bpy.types.Panel):
 			layout.label(text=text, icon='ERROR')
 		else:
 			text = "Found " + str(wm.numDevicesConnected) + " connected LKG devices."
-			layout.label(text=text, icon='CAMERA_STEREO')		
-	# 	layout.prop(context.window_manager, "tilesHorizontal")
-	# 	layout.prop(context.window_manager, "tilesVertical")
+			layout.label(text=text, icon='CAMERA_STEREO')	
 
 classes = (
 	OffScreenDraw,
@@ -220,7 +181,6 @@ classes = (
 	looking_glass_panel,
 	looking_glass_render_viewer,
 	looking_glass_send_quilt_to_holoplay_service,
-	LookingGlassPreferences,
 )
 
 def register():
@@ -228,34 +188,6 @@ def register():
 	from bpy.utils import register_class
 	for cls in classes:
 		register_class(cls)
-	# bpy.types.IMAGE_MT_view.append(looking_glass_live_view.menu_func)
-	# bpy.types.VIEW3D_MT_view.append(looking_glass_live_view.menu_func)
-	# # set the default path to libHoloPlayCore on first registration, can be changed by the user
-	# fp = bpy.context.preferences.addons['looking_glass_tools'].preferences.filepath
-	# if fp == '':
-	# 	home = pathlib.Path.home()
-	# 	sys = platform.system()
-	# 	lkgFolderName = "Looking Glass Factory"
-	# 	lkgSubFolderName= "Corelibrary"
-	# 	if sys.startswith('Darwin'):
-	# 		print("Running on Mac OS")
-	# 		# convert from PosixPath to string before storing in preferences
-	# 		filepath = str(str(home) + "/Library/Application Support/" + lkgFolderName + "/" + lkgSubFolderName + "/libHoloPlayCore.dylib")
-	# 		# the holoplay library might also reside in the local library
-	# 		if not os.path.exists(filepath):
-	# 			filepath = str("/Library/Application Support/" + lkgFolderName + "/" + lkgSubFolderName + "/libHoloPlayCore.dylib")
-	# 		bpy.context.preferences.addons['looking_glass_tools'].preferences.filepath = filepath
-	# 	elif sys.startswith('Windows'):
-	# 		print("Running on Windows")
-	# 		filepath = str(home / "AppData/Roaming" / lkgFolderName / lkgSubFolderName / "HoloPlayCore.dll")
-	# 		bpy.context.preferences.addons['looking_glass_tools'].preferences.filepath = filepath
-	# 	elif sys.startswith('Linux'):
-	# 		print("Running on Linux")
-	# 		filepath = str(home / ".local/share" / lkgFolderName / lkgSubFolderName / "libHoloPlayCore.so")			
-	# 		bpy.context.preferences.addons['looking_glass_tools'].preferences.filepath = filepath
-	# elif not os.path.exists(fp):
-	# 	print("Path to libHoloPlayCore is set but file cannot be found.")
-	# 	# get the location of the HoloPlayCore SDK lib from user preferences
 	
 	try:			
 		# run and initialize holoplay core
