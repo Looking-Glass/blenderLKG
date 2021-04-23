@@ -263,12 +263,14 @@ class lkgRenderSetup(bpy.types.Operator):
 
 
 	def execute(self, context):
-		global hp
+		wm = context.window_manager
+		# global hp
 		# holoplay core is loaded as global var in looking_glass_settings.py
-		hp = looking_glass_settings.hp
-		i = ctypes.c_int(0)
-		hp.hpc_GetDevicePropertyDisplayAspect.restype = ctypes.c_float
-		hp_displayAspect = hp.hpc_GetDevicePropertyDisplayAspect(i)
+		# hp = looking_glass_settings.hp
+		# i = ctypes.c_int(0)
+		# hp.hpc_GetDevicePropertyDisplayAspect.restype = ctypes.c_float
+		# hp_displayAspect = hp.hpc_GetDevicePropertyDisplayAspect(i)
+		hp_displayAspect = wm.aspect
 		# the fov of the Blender camera is relative to the broader side
 		# at an aspect ratio of 16:10 a fov of 14° translates to ~22.23 degrees
 		global fov

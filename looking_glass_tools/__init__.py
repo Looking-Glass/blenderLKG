@@ -18,7 +18,7 @@
 
 bl_info = {
 	"name": "Looking Glass Toolset",
-	"author": "Gottfried Hofmann, Kyle Appelgate",
+	"author": "Gottfried Hofmann, Kyle Appelgate, Evan Kahn",
 	"version": (2, 0),
 	"blender": (2, 83, 6),
 	"location": "3D View > Looking Glass Tab",
@@ -33,11 +33,13 @@ if "bpy" in locals():
 	importlib.reload(looking_glass_live_view)
 	importlib.reload(looking_glass_render_setup)
 	importlib.reload(looking_glass_settings)
+	importlib.reload(holoplay_service_api_commands)
 else:
 	from . import *
 	from . looking_glass_render_setup import *
 	from . looking_glass_live_view import *
 	from . looking_glass_settings import *
+	from . holoplay_service_api_commands import *
 
 if "looking_glass_live_view" not in globals():
 	message = ("\n\n"
@@ -120,8 +122,8 @@ class looking_glass_render_viewer(bpy.types.Panel):
 	def draw(self, context):
 		layout = self.layout
 		layout.operator("lookingglass.render_setup", text="Create Render Setup", icon='PLUGIN')
-		layout.operator("lookingglass.window_setup", text="Open LKG Window", icon='WINDOW')
-		layout.operator("view3d.offscreen_draw", text="Start/Stop Live View", icon='CAMERA_STEREO')
+		layout.operator("lookingglass.send_quilt_to_holoplay_service", text="Send Quilt", icon='CAMERA_STEREO')
+		# layout.operator("view3d.offscreen_draw", text="Start/Stop Live View", icon='CAMERA_STEREO')
 
 		row = layout.row(align = True)
 		row.label(text = "LKG image to view:")
@@ -170,6 +172,13 @@ class looking_glass_panel(bpy.types.Panel):
 			max = 10000.0,
 			description = "Screen height of looking glass display in pixels.",
 			)
+	bpy.types.WindowManager.aspect = bpy.props.FloatProperty(
+			name = "Aspect Ratio",
+			default = 0.75,
+			min = 0.0,
+			max = 100.0,
+			description = "Aspect ratio of looking glass display.",
+			)
 	bpy.types.WindowManager.tilesHorizontal = bpy.props.IntProperty(
 			name = "Horizontal Tiles",
 			default = 5,
@@ -207,10 +216,10 @@ class looking_glass_panel(bpy.types.Panel):
 
 classes = (
 	OffScreenDraw,
-	looking_glass_window_setup,
 	lkgRenderSetup,
 	looking_glass_panel,
 	looking_glass_render_viewer,
+	looking_glass_send_quilt_to_holoplay_service,
 	LookingGlassPreferences,
 )
 
@@ -219,53 +228,49 @@ def register():
 	from bpy.utils import register_class
 	for cls in classes:
 		register_class(cls)
-	bpy.types.IMAGE_MT_view.append(looking_glass_live_view.menu_func)
-	bpy.types.VIEW3D_MT_view.append(looking_glass_live_view.menu_func)
-	# set the default path to libHoloPlayCore on first registration, can be changed by the user
-	fp = bpy.context.preferences.addons['looking_glass_tools'].preferences.filepath
-	if fp == '':
-		home = pathlib.Path.home()
-		sys = platform.system()
-		lkgFolderName = "Looking Glass Factory"
-		lkgSubFolderName= "Corelibrary"
-		if sys.startswith('Darwin'):
-			print("Running on Mac OS")
-			# convert from PosixPath to string before storing in preferences
-			filepath = str(str(home) + "/Library/Application Support/" + lkgFolderName + "/" + lkgSubFolderName + "/libHoloPlayCore.dylib")
-			# the holoplay library might also reside in the local library
-			if not os.path.exists(filepath):
-				filepath = str("/Library/Application Support/" + lkgFolderName + "/" + lkgSubFolderName + "/libHoloPlayCore.dylib")
-			bpy.context.preferences.addons['looking_glass_tools'].preferences.filepath = filepath
-		elif sys.startswith('Windows'):
-			print("Running on Windows")
-			filepath = str(home / "AppData/Roaming" / lkgFolderName / lkgSubFolderName / "HoloPlayCore.dll")
-			bpy.context.preferences.addons['looking_glass_tools'].preferences.filepath = filepath
-		elif sys.startswith('Linux'):
-			print("Running on Linux")
-			filepath = str(home / ".local/share" / lkgFolderName / lkgSubFolderName / "libHoloPlayCore.so")			
-			bpy.context.preferences.addons['looking_glass_tools'].preferences.filepath = filepath
-	elif not os.path.exists(fp):
-		print("Path to libHoloPlayCore is set but file cannot be found.")
-		# get the location of the HoloPlayCore SDK lib from user preferences
+	# bpy.types.IMAGE_MT_view.append(looking_glass_live_view.menu_func)
+	# bpy.types.VIEW3D_MT_view.append(looking_glass_live_view.menu_func)
+	# # set the default path to libHoloPlayCore on first registration, can be changed by the user
+	# fp = bpy.context.preferences.addons['looking_glass_tools'].preferences.filepath
+	# if fp == '':
+	# 	home = pathlib.Path.home()
+	# 	sys = platform.system()
+	# 	lkgFolderName = "Looking Glass Factory"
+	# 	lkgSubFolderName= "Corelibrary"
+	# 	if sys.startswith('Darwin'):
+	# 		print("Running on Mac OS")
+	# 		# convert from PosixPath to string before storing in preferences
+	# 		filepath = str(str(home) + "/Library/Application Support/" + lkgFolderName + "/" + lkgSubFolderName + "/libHoloPlayCore.dylib")
+	# 		# the holoplay library might also reside in the local library
+	# 		if not os.path.exists(filepath):
+	# 			filepath = str("/Library/Application Support/" + lkgFolderName + "/" + lkgSubFolderName + "/libHoloPlayCore.dylib")
+	# 		bpy.context.preferences.addons['looking_glass_tools'].preferences.filepath = filepath
+	# 	elif sys.startswith('Windows'):
+	# 		print("Running on Windows")
+	# 		filepath = str(home / "AppData/Roaming" / lkgFolderName / lkgSubFolderName / "HoloPlayCore.dll")
+	# 		bpy.context.preferences.addons['looking_glass_tools'].preferences.filepath = filepath
+	# 	elif sys.startswith('Linux'):
+	# 		print("Running on Linux")
+	# 		filepath = str(home / ".local/share" / lkgFolderName / lkgSubFolderName / "libHoloPlayCore.so")			
+	# 		bpy.context.preferences.addons['looking_glass_tools'].preferences.filepath = filepath
+	# elif not os.path.exists(fp):
+	# 	print("Path to libHoloPlayCore is set but file cannot be found.")
+	# 	# get the location of the HoloPlayCore SDK lib from user preferences
 	
 	try:			
 		# run and initialize holoplay core
 		looking_glass_settings.init()
 		
 		wm = bpy.context.window_manager
-		hp = looking_glass_settings.hp
+	# 	hp = looking_glass_settings.hp
 
 		wm.numDevicesConnected = looking_glass_settings.numDevices
 	except:
-		print("Loading of Holoplay Core library failed. Is the path set correctly?")
+	 	print("Loading of Holoplay Core library failed. Is the path set correctly?")
 
 	print("Registered the live view")
 
 def unregister():
-	try:
-		looking_glass_settings.hp.hpc_CloseApp()
-	except:
-		print("Closing of the Holoplay Core App failed.")
 	from bpy.utils import unregister_class
 	for cls in reversed(classes):
 		unregister_class(cls)
