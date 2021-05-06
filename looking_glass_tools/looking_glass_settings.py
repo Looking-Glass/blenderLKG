@@ -187,7 +187,7 @@ def init():
         ("pycparser","pycparser"),
         ("pynng","pynng"),
         ("sniffio", "sniffio"),
-        ("Pillow", "Pillow")
+        ("PIL", "Pillow")
     ])
 
     import pynng
