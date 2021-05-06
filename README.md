@@ -9,7 +9,7 @@ The version of the addon requires at least Blender 2.92.
 
 * If you have not done so, install HoloPlayService.
 
-* Open Blender, and go to _File → User Preferences → Add-ons → Install Add-on from file_.
+* Open Blender, and go to _Edit → Preferences → Add-ons → Install..._.
 * Select the .zip and click "Install Add-on from file" on the top right.
 * Enable the addon by checking the box next to it on the left.
 * Click "Save User Settings" to keep the addon enabled.
