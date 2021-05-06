@@ -1,5 +1,5 @@
-*Last updated: April 23, 2021*
-*Version: 3.0*
+*Last updated: May 06, 2021*
+*Version: 3.1*
 
 This Getting Started Guide is for the Blender Add-on created specifically for use with the Looking Glass. It features live-display of the camera view in the image editor, an automatic render-setup for Cycles and the option to view rendered multi-view image sequences in the Looking Glass.
 
