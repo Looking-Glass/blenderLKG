@@ -206,16 +206,16 @@ def init():
     if response != None:
         # create a dictionary with an index for this device
         devices = response['devices']
-        print("Printing Devices")
-        screenW = devices[0]['calibration']['screenW']['value']
-        screenH = devices[0]['calibration']['screenH']['value']
-        aspect = screenW / screenH
-        wm.screenW = screenW
-        wm.screenH = screenH
-        wm.aspect = aspect
         if devices == []:
             print("No Looking Glass devices found")
         else:
+            print("Printing Devices")
+            screenW = devices[0]['calibration']['screenW']['value']
+            screenH = devices[0]['calibration']['screenH']['value']
+            aspect = screenW / screenH
+            wm.screenW = screenW
+            wm.screenH = screenH
+            wm.aspect = aspect
             print(devices)
             wm.numDevicesConnected = 1
 

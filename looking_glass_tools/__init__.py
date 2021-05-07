@@ -19,7 +19,7 @@
 bl_info = {
 	"name": "Looking Glass Toolset",
 	"author": "Gottfried Hofmann, Kyle Appelgate, Evan Kahn",
-	"version": (3, 0),
+	"version": (3, 1),
 	"blender": (2, 92, 0),
 	"location": "3D View > Looking Glass Tab",
 	"description": "Creates a window showing the viewport from camera view ready for the looking glass display. Builds a render-setup for offline rendering looking glass-compatible images. Allows to view images rendered for looking glass by selecting the first image of the multiview sequence.",
@@ -189,17 +189,9 @@ def register():
 	for cls in classes:
 		register_class(cls)
 	
-	try:			
-		# run and initialize holoplay core
-		looking_glass_settings.init()
+	looking_glass_settings.init()
 		
-		wm = bpy.context.window_manager
-	# 	hp = looking_glass_settings.hp
-
-		wm.numDevicesConnected = looking_glass_settings.numDevices
-	except:
-	 	print("Loading of Holoplay Core library failed. Is the path set correctly?")
-
+	wm = bpy.context.window_manager
 	print("Registered the live view")
 
 def unregister():
