@@ -740,6 +740,12 @@ class looking_glass_send_quilt_to_holoplay_service(bpy.types.Operator):
 			hp_myQuilt = od.setupMyQuilt(hp_myQuilt)
 		LKG_image = context.scene.LKG_image		
 		if LKG_image != None:
+			if LKG_image.name == 'Render Result':
+				self.report({"WARNING"}, "Sending a rendered image directly to HoloPlay Service is not supported yet. Please save the image to disk and load the first image of the multiview sequence.")
+				return {"CANCELLED"}
+			if LKG_image.name == 'Viewer Node':
+				self.report({"WARNING"}, "Sending a rendered image from Viewer Node to HoloPlay Service is not supported yet. Please save the image to disk and load the first image of the multiview sequence.")
+				return {"CANCELLED"}
 			quilt = od.create_quilt_from_holoplay_multiview_image(od, context)
 		else:
 			offscreens = od._setup_offscreens(context, qs_totalViews)
