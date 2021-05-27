@@ -27,12 +27,12 @@ from . holoplay_service_api_commands import *
 
 def ensure_site_packages(packages):
     """ `packages`: list of tuples (<import name>, <pip name>) """
-    
+
     if not packages:
         return
 
     import site
-    import importlib
+    import importlib.util
 
     sys.path.append(site.getusersitepackages())
 
@@ -52,7 +52,7 @@ def ensure_site_packages(packages):
 def send_message(sock, inputObj):
     import pynng
     import cbor
-    
+
     out = cbor.dumps(inputObj)
     print("---------------")
     print("Command (" + str(len(out)) + " bytes, "+str(len(inputObj['bin']))+" binary): ")
@@ -74,7 +74,7 @@ def send_quilt(sock, quilt, duration=10):
     aspect = bpy.context.window_manager.aspect
 
     from PIL import Image, ImageOps
-        
+
     start_time = timeit.default_timer()
     print("Show a single quilt for " + str(duration) + " seconds, then wipe.")
     print("===================================================")
@@ -83,17 +83,17 @@ def send_quilt(sock, quilt, duration=10):
     # in the live view solution
     img0 = quilt
     W,H = img0.size
-    
+
     # pre-allocate numpy array for better performance
     px0 = np.zeros(H*W*4, dtype=np.float32)
     # foreach_get is probably the fastest method to aquire the pixel values from a Blender image datablock
     img0.pixels.foreach_get(px0)
     print("Reading image from Blender image datablock: %.6f" % (timeit.default_timer() - start_time))
-    
+
     # we need to convert the floats to integers from 0-255 for most image formats like PNG or BMP which can be send to HoloPlay Service
     # np.multiply(px0, 255, out=px0, casting="unsafe")
     pixels=px0.astype(np.uint8, order="C")
-    
+
     pimg_time = timeit.default_timer()
     # for some reason the following only works when we create a PIL Image from a bytes-stream
     # so we need to convert the numpy array to bytes and read that
@@ -102,12 +102,12 @@ def send_quilt(sock, quilt, duration=10):
     # the result is flipped, probably due to numpy, flip it back
     pimg_flipped = ImageOps.flip(pimg)
     print("Converting pixels to bytes-stream and flipping took: %.6f" % (timeit.default_timer() - pimg_time))
-    
+
     # the idea is that we convert the PIL image to a simple file format HoloPlay Service / stb_image can read
     # and store it in a BytesIO object instead of disk
     output = io.BytesIO()
     pimg_flipped.convert('RGBA').save(output, 'BMP')
-    
+
     # the contents of the BytesIO object becomes our blob we send to HoloPlay Service
     blob = output.getvalue()
     settings = {'vx': 5,'vy': 9,'vtotal': 45,'aspect': aspect}
@@ -126,19 +126,19 @@ def send_quilt_from_np(sock, quilt, W=4096, H=4096, duration=10):
     aspect = bpy.context.window_manager.aspect
 
     from PIL import Image, ImageOps
-        
+
     start_time = timeit.default_timer()
     # print("Show a single quilt for " + str(duration) + " seconds, then wipe.")
     # print("===================================================")
 
-    # we get the data from the live view as numpy array 
+    # we get the data from the live view as numpy array
     px0 = quilt
     #W,H = px0.size
-    
+
     # we need to convert the 0-1 floats to integers from 0-255
     # np.multiply(px0, 255, out=px0, casting="unsafe")
     pixels=px0.astype(np.uint8, order="C")
-    
+
     pimg_time = timeit.default_timer()
     # for some reason the following only works when we create a PIL Image from a bytes-stream
     # so we need to convert the numpy array to bytes and read that
@@ -149,12 +149,12 @@ def send_quilt_from_np(sock, quilt, W=4096, H=4096, duration=10):
     # the result is flipped, probably due to numpy, flip it back
     pimg_flipped = ImageOps.flip(pimg)
     print("Converting pixels to bytes-stream and flipping took: %.6f" % (timeit.default_timer() - pimg_time))
-    
+
     # the idea is that we convert the PIL image to a simple file format HoloPlay Service / stb_image can read
     # and store it in a BytesIO object instead of disk
     output = io.BytesIO()
     pimg_flipped.convert('RGBA').save(output, 'BMP')
-    
+
     # the contents of the BytesIO object becomes our blob we send to HoloPlay Service
     blob = output.getvalue()
     # settings = {'vx': 5,'vy': 9,'vtotal': 45,'aspect': 1.6}
