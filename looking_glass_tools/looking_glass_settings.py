@@ -26,7 +26,6 @@ import timeit
 from . holoplay_service_api_commands import *
 from . import cbor
 from . import cffi
-# from . import pynng
 
 def ensure_site_packages(packages):
     """ `packages`: list of tuples (<import name>, <pip name>) """
@@ -114,12 +113,8 @@ def send_quilt(sock, quilt, duration=10):
     # the contents of the BytesIO object becomes our blob we send to HoloPlay Service
     blob = output.getvalue()
     settings = {'vx': 5,'vy': 9,'vtotal': 45,'aspect': aspect}
-    # settings = {'vx': 5,'vy': 9,'vtotal': 45,'aspect': 0.75}
     send_message(sock, show_quilt(blob, settings))
     print("Reading quilt from Blender image datablock and sending it to HoloPlay Service took: %.6f" % (timeit.default_timer() - start_time))
-    # print("Waiting for 10 seconds...")
-    # time.sleep(duration)
-    # send_message(sock, wipe())
 
 # def send_quilt_from_np(sock, quilt, W=4096, H=4096, duration=10):
 def send_quilt_from_np(sock, quilt, W=4096, H=4096, duration=10):
@@ -131,8 +126,6 @@ def send_quilt_from_np(sock, quilt, W=4096, H=4096, duration=10):
     from PIL import Image, ImageOps
 
     start_time = timeit.default_timer()
-    # print("Show a single quilt for " + str(duration) + " seconds, then wipe.")
-    # print("===================================================")
 
     # we get the data from the live view as numpy array
     px0 = quilt
@@ -145,7 +138,6 @@ def send_quilt_from_np(sock, quilt, W=4096, H=4096, duration=10):
     pimg_time = timeit.default_timer()
     # for some reason the following only works when we create a PIL Image from a bytes-stream
     # so we need to convert the numpy array to bytes and read that
-    # pimg = Image.frombytes("RGBA", (W,H),  pixels.tobytes())
     pimg = Image.frombytes("RGBA", (W,H),  pixels.tobytes())
 
 
@@ -160,13 +152,9 @@ def send_quilt_from_np(sock, quilt, W=4096, H=4096, duration=10):
 
     # the contents of the BytesIO object becomes our blob we send to HoloPlay Service
     blob = output.getvalue()
-    # settings = {'vx': 5,'vy': 9,'vtotal': 45,'aspect': 1.6}
     settings = {'vx': 5,'vy': 9,'vtotal': 45,'aspect': aspect}
     send_message(sock, show_quilt(blob, settings))
     print("Reading quilt from numpy array and sending it to HoloPlay Service took in total: %.6f" % (timeit.default_timer() - start_time))
-    # print("Waiting for 10 seconds...")
-    # time.sleep(duration)
-    # send_message(sock, wipe())
 
 def init():
     global hp
@@ -185,11 +173,7 @@ def init():
     driver_url = "ipc:///tmp/holoplay-driver.ipc"
 
     ensure_site_packages([
-        # ("cbor", "cbor"),
-        # ("cffi","cffi"),
-        # ("pycparser","pycparser"),
         ("pynng","pynng"),
-        # ("sniffio", "sniffio"),
         ("PIL", "Pillow")
     ])
 
@@ -197,7 +181,7 @@ def init():
 
     # This script should work identically whether addr = driver_url or addr = ws_url
     addr = driver_url
-    # if sock == None:
+
     sock = pynng.Req0(recv_timeout=2000)
     try:
         sock.dial(addr, block = True)
