@@ -24,6 +24,9 @@ import io
 import numpy as np
 import timeit
 from . holoplay_service_api_commands import *
+from . import cbor
+from . import cffi
+# from . import pynng
 
 def ensure_site_packages(packages):
     """ `packages`: list of tuples (<import name>, <pip name>) """
@@ -51,8 +54,8 @@ def ensure_site_packages(packages):
 
 def send_message(sock, inputObj):
     import pynng
-    import cbor
-
+    from . import cbor
+    
     out = cbor.dumps(inputObj)
     print("---------------")
     print("Command (" + str(len(out)) + " bytes, "+str(len(inputObj['bin']))+" binary): ")
@@ -182,11 +185,11 @@ def init():
     driver_url = "ipc:///tmp/holoplay-driver.ipc"
 
     ensure_site_packages([
-        ("cbor", "cbor"),
-        ("cffi","cffi"),
-        ("pycparser","pycparser"),
+        # ("cbor", "cbor"),
+        # ("cffi","cffi"),
+        # ("pycparser","pycparser"),
         ("pynng","pynng"),
-        ("sniffio", "sniffio"),
+        # ("sniffio", "sniffio"),
         ("PIL", "Pillow")
     ])
 
@@ -200,7 +203,8 @@ def init():
         sock.dial(addr, block = True)
     except:
         print("Could not open socket. Is driver running?")
-        sys.exit(1)
+        sock = None
+        return False
 
     response = send_message(sock, {'cmd':{'info':{}},'bin':''})
     if response != None:
@@ -221,4 +225,13 @@ def init():
 
     print("Number of devices found: " + str(wm.numDevicesConnected))
 
-    print("Init Settings")
+class looking_glass_reconnect_to_holoplay_service(bpy.types.Operator):
+    """ Reconnects to Holoplay Service """
+    bl_idname = "lookingglass.reconnect_to_holoplay_service"
+    bl_label = "Reconnect to Service"
+    bl_description = "Re-Initializes the connection to HoloPlay Service"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        init()
+        return {'FINISHED'}

@@ -734,6 +734,10 @@ class looking_glass_send_quilt_to_holoplay_service(bpy.types.Operator):
 		start_time = timeit.default_timer()
 
 		sock = looking_glass_settings.sock
+		if sock == None:
+			self.report({"ERROR"}, "Could not connect to socket, aborting.")
+			return {"CANCELLED"}
+
 		qs_totalViews = 45
 		od = OffScreenDraw
 		if hp_myQuilt == None:

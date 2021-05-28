@@ -62,6 +62,7 @@ from math import *
 from mathutils import *
 from bpy.types import AddonPreferences, PropertyGroup
 from bpy.props import FloatProperty, PointerProperty
+from . import cbor
 
 # global var to store the holoplay core instance
 hp = None
@@ -173,7 +174,8 @@ class looking_glass_panel(bpy.types.Panel):
 			layout.label(text=text, icon='ERROR')
 		else:
 			text = "Found " + str(wm.numDevicesConnected) + " connected LKG devices."
-			layout.label(text=text, icon='CAMERA_STEREO')	
+			layout.label(text=text, icon='CAMERA_STEREO')
+		layout.operator("lookingglass.reconnect_to_holoplay_service", text="Reconnect to Service", icon='PLUGIN')	
 
 classes = (
 	OffScreenDraw,
@@ -181,6 +183,7 @@ classes = (
 	looking_glass_panel,
 	looking_glass_render_viewer,
 	looking_glass_send_quilt_to_holoplay_service,
+	looking_glass_reconnect_to_holoplay_service
 )
 
 def register():

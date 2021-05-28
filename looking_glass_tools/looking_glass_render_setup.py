@@ -156,14 +156,8 @@ class lkgRenderSetup(bpy.types.Operator):
 		currentMultiview.select_set(True)
 		bpy.context.view_layer.objects.active = currentMultiview
 		self.setParentTrans(cam, currentMultiview)
-		# const = cam.constraints.new('CHILD_OF')
-		# const.target=currentMultiview
-		# const.inverse_matrix = currentMultiview.matrix_world.inverted()
-
-
 
 		# cam distance
-		#camLocZ = currentMultiview.scale[0] / tan(0.5 * fov_rad)
 		camLocZ = self.calculate_camera_distance_z(fov)
 		cam.location[2] = camLocZ
 
@@ -208,7 +202,7 @@ class lkgRenderSetup(bpy.types.Operator):
 		cam.data.show_limits = True
 
 		# cam should be invisible in the viewport because otherwise a line will appear in the LKG
-		# for 2.8 we need to use hide_set(True) because hide_viewport will globally disable it in viewports, temporarily breaking the child-parent-relationship
+		# from 2.8 upwards we need to use hide_set(True) because hide_viewport will globally disable it in viewports, temporarily breaking the child-parent-relationship
 		cam.hide_set(True)
 
 		return cam
