@@ -586,7 +586,8 @@ class OffScreenDraw(bpy.types.Operator):
 			hp_imgDataBlockQuilt = bpy.data.images.new("hp_imgDataBlockQuilt", qs_width, qs_height, float_buffer=True)
 
 		start_time = timeit.default_timer()
-		hp_imgDataBlockQuilt.pixels.foreach_set(bufferForQuilt)
+		buffer_list = [x / 255 for x in bufferForQuilt.to_list()]
+		hp_imgDataBlockQuilt.pixels.foreach_set(buffer_list)
 		print("Copying from buffer into image datablock took: %.6f" % (timeit.default_timer() - start_time))
 		return hp_imgDataBlockQuilt
 
@@ -717,7 +718,7 @@ class OffScreenDraw(bpy.types.Operator):
 		print("Cancel finished")
 
 class looking_glass_send_quilt_to_holoplay_service(bpy.types.Operator):
-	""" Creates a new window of type image editor """
+	""" Sends the either the open image or the current 3D view to HoloPlay Service as a quilt """
 	bl_idname = "lookingglass.send_quilt_to_holoplay_service"
 	bl_label = "Send Quilt"
 	bl_description = "Sends the currently loaded image to HoloPlay Service to display it in the Looking Glass."
@@ -764,6 +765,50 @@ class looking_glass_send_quilt_to_holoplay_service(bpy.types.Operator):
 		# send_quilt(sock, quilt, duration=int(7))
 		send_quilt_from_np(sock, quilt, duration=int(7))
 		print("Done.")
+		return {'FINISHED'}
+
+class looking_glass_save_quilt_as_image(bpy.types.Operator):
+	""" Creates a new window of type image editor """
+	bl_idname = "lookingglass.save_quilt_as_image"
+	bl_label = "Save Quilt"
+	bl_description = "Saves the currently open image or the live to disk as a quilt."
+	bl_options = {'REGISTER', 'UNDO'}
+
+	def execute(self, context):
+		global hp_imgDataBlockQuilt
+		global hp_myQuilt
+		global qs_width
+		global qs_height
+
+		# print("Init Settings")
+		start_time = timeit.default_timer()
+
+		qs_totalViews = 45
+		od = OffScreenDraw
+		if hp_myQuilt == None:
+			hp_myQuilt = od.setupMyQuilt(hp_myQuilt)
+		LKG_image = context.scene.LKG_image		
+		if LKG_image != None:
+			if LKG_image.name == 'Render Result':
+				self.report({"WARNING"}, "Sending a rendered image directly to HoloPlay Service is not supported yet. Please save the image to disk and load the first image of the multiview sequence.")
+				return {"CANCELLED"}
+			if LKG_image.name == 'Viewer Node':
+				self.report({"WARNING"}, "Sending a rendered image from Viewer Node to HoloPlay Service is not supported yet. Please save the image to disk and load the first image of the multiview sequence.")
+				return {"CANCELLED"}
+			quilt = od.create_quilt_from_holoplay_multiview_image(od, context)
+		else:
+			offscreens = od._setup_offscreens(context, qs_totalViews)
+			print("Setting up HoloPlay Service took: %.6f" % (timeit.default_timer() - start_time))
+			start_time_offscreendraw = timeit.default_timer()
+			od.draw_3dview_into_texture(od, context, offscreens)
+			print("Drawing into offscreens took: %.6f" % (timeit.default_timer() - start_time_offscreendraw))
+			start_time_quiltcopy = timeit.default_timer()
+			quilt = od.copy_quilt_from_texture_to_image_datablock(hp_myQuilt[0])
+			#quilt = od.copy_quilt_from_texture_to_numpy_array(hp_myQuilt[0])
+			print("Copying quilt into np array took: %.6f" % (timeit.default_timer() - start_time_quiltcopy))
+		# send_quilt(sock, quilt, duration=int(7))
+		# send_quilt_from_np(sock, quilt, duration=int(7))
+		# print("Done.")
 		return {'FINISHED'}
 
 def menu_func(self, context):

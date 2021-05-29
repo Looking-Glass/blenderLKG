@@ -86,7 +86,8 @@ class looking_glass_render_viewer(bpy.types.Panel):
 	def draw(self, context):
 		layout = self.layout
 		layout.operator("lookingglass.render_setup", text="Create Render Setup", icon='PLUGIN')
-		layout.operator("lookingglass.send_quilt_to_holoplay_service", text="Send Quilt", icon='CAMERA_STEREO')
+		layout.operator("lookingglass.send_quilt_to_holoplay_service", text="Send Quilt to Looking Glass", icon='CAMERA_STEREO')
+		layout.operator("lookingglass.save_quilt_as_image", text="Save Quilt to Image Datablock", icon='IMAGE')
 		# layout.operator("view3d.offscreen_draw", text="Start/Stop Live View", icon='CAMERA_STEREO')
 
 		row = layout.row(align = True)
@@ -175,6 +176,8 @@ class looking_glass_panel(bpy.types.Panel):
 		else:
 			text = "Found " + str(wm.numDevicesConnected) + " connected LKG devices."
 			layout.label(text=text, icon='CAMERA_STEREO')
+			text = "Device type: " + looking_glass_settings.hardwareVersion
+			layout.label(text=text)
 		layout.operator("lookingglass.reconnect_to_holoplay_service", text="Reconnect to Service", icon='PLUGIN')	
 
 classes = (
@@ -183,6 +186,7 @@ classes = (
 	looking_glass_panel,
 	looking_glass_render_viewer,
 	looking_glass_send_quilt_to_holoplay_service,
+	looking_glass_save_quilt_as_image,
 	looking_glass_reconnect_to_holoplay_service
 )
 

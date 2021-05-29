@@ -27,6 +27,8 @@ from . holoplay_service_api_commands import *
 from . import cbor
 from . import cffi
 
+hardwareVersion = None
+
 def ensure_site_packages(packages):
     """ `packages`: list of tuples (<import name>, <pip name>) """
 
@@ -163,6 +165,7 @@ def init():
     global screenW
     global screenH
     global aspect
+    global hardwareVersion
 
     print("Init Settings")
     start_time = timeit.default_timer()
@@ -200,12 +203,14 @@ def init():
             print("Printing Devices")
             screenW = devices[0]['calibration']['screenW']['value']
             screenH = devices[0]['calibration']['screenH']['value']
+            hardwareVersion = devices[0]['hardwareVersion'] # not storing this in wm because we need to change this to support multiple devices in the future
             aspect = screenW / screenH
             wm.screenW = screenW
             wm.screenH = screenH
             wm.aspect = aspect
             print(devices)
-            wm.numDevicesConnected = 1
+            print(hardwareVersion)
+            wm.numDevicesConnected = 1 # temporarily support only one device due to the way we globally store vars in the wm
 
     print("Number of devices found: " + str(wm.numDevicesConnected))
 
