@@ -75,7 +75,13 @@ def send_quilt(sock, quilt, duration=10):
     print("===================================================")
     print("Sending quilt to HoloPlay Service")
 
-    aspect = bpy.context.window_manager.aspect
+    wm = bpy.context.window_manager
+    aspect = wm.aspect
+    W = wm.quiltX
+    H = wm.quiltY
+    vx = wm.tileX
+    vy = wm.tileY
+    vtotal = vx*vy
 
     from PIL import Image, ImageOps
 
@@ -114,7 +120,7 @@ def send_quilt(sock, quilt, duration=10):
 
     # the contents of the BytesIO object becomes our blob we send to HoloPlay Service
     blob = output.getvalue()
-    settings = {'vx': 5,'vy': 9,'vtotal': 45,'aspect': aspect}
+    settings = {'vx': vx,'vy': vy,'vtotal': vtotal,'aspect': aspect}
     send_message(sock, show_quilt(blob, settings))
     print("Reading quilt from Blender image datablock and sending it to HoloPlay Service took: %.6f" % (timeit.default_timer() - start_time))
 
@@ -123,7 +129,13 @@ def send_quilt_from_np(sock, quilt, W=4096, H=4096, duration=10):
     print("===================================================")
     print("Sending quilt to HoloPlay Service")
 
-    aspect = bpy.context.window_manager.aspect
+    wm = bpy.context.window_manager
+    aspect = wm.aspect
+    W = wm.quiltX
+    H = wm.quiltY
+    vx = wm.tileX
+    vy = wm.tileY
+    vtotal = vx*vy
 
     from PIL import Image, ImageOps
 
@@ -154,7 +166,7 @@ def send_quilt_from_np(sock, quilt, W=4096, H=4096, duration=10):
 
     # the contents of the BytesIO object becomes our blob we send to HoloPlay Service
     blob = output.getvalue()
-    settings = {'vx': 5,'vy': 9,'vtotal': 45,'aspect': aspect}
+    settings = {'vx': vx,'vy': vy,'vtotal': vtotal,'aspect': aspect}
     send_message(sock, show_quilt(blob, settings))
     print("Reading quilt from numpy array and sending it to HoloPlay Service took in total: %.6f" % (timeit.default_timer() - start_time))
 
@@ -200,16 +212,29 @@ def init():
         if devices == []:
             print("No Looking Glass devices found")
         else:
-            print("Printing Devices")
+            print("Reading settings from device")
             screenW = devices[0]['calibration']['screenW']['value']
             screenH = devices[0]['calibration']['screenH']['value']
+            quiltX = devices[0]['defaultQuilt']['quiltX']
+            quiltY = devices[0]['defaultQuilt']['quiltY']
+            tileX = devices[0]['defaultQuilt']['tileX']
+            tileY = devices[0]['defaultQuilt']['tileY']
             hardwareVersion = devices[0]['hardwareVersion'] # not storing this in wm because we need to change this to support multiple devices in the future
             aspect = screenW / screenH
             wm.screenW = screenW
             wm.screenH = screenH
             wm.aspect = aspect
-            print(devices)
-            print(hardwareVersion)
+            wm.quiltX = quiltX
+            wm.quiltY = quiltY
+            wm.tileX = tileX
+            wm.tileY = tileY
+            if hardwareVersion == 'portrait':
+                wm.viewX = 420
+                wm.viewY = 560
+                wm.quiltX = 3360
+                wm.quiltY = 3360
+            # print(devices)
+            # print(hardwareVersion)
             wm.numDevicesConnected = 1 # temporarily support only one device due to the way we globally store vars in the wm
 
     print("Number of devices found: " + str(wm.numDevicesConnected))

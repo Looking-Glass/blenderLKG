@@ -144,19 +144,47 @@ class looking_glass_panel(bpy.types.Panel):
 			max = 100.0,
 			description = "Aspect ratio of looking glass display.",
 			)
-	bpy.types.WindowManager.tilesHorizontal = bpy.props.IntProperty(
+	bpy.types.WindowManager.tileX = bpy.props.IntProperty(
 			name = "Horizontal Tiles",
 			default = 5,
 			min = 0,
 			max = 100,
 			description = "How many views to store horizontally",
 			)
-	bpy.types.WindowManager.tilesVertical = bpy.props.IntProperty(
+	bpy.types.WindowManager.tileY = bpy.props.IntProperty(
 			name = "Vertical Tiles",
 			default = 9,
 			min = 0,
 			max = 100,
-			description = "How many views to store horizontally",
+			description = "How many views to store vertically",
+			)
+	bpy.types.WindowManager.quiltX = bpy.props.IntProperty(
+			name = "Horizontal Quilt Resolution",
+			default = 4096,
+			min = 0,
+			max = 100000,
+			description = "Resolution of the Quilt in X",
+			)
+	bpy.types.WindowManager.quiltY = bpy.props.IntProperty(
+			name = "Vertical Quilt Resolution",
+			default = 4096,
+			min = 0,
+			max = 100000,
+			description = "Resolution of the Quilt in Y",
+			)
+	bpy.types.WindowManager.viewX = bpy.props.IntProperty(
+			name = "Horizontal View Resolution",
+			default = 819,
+			min = 0,
+			max = 10000,
+			description = "Resolution of an individual view in X",
+			)
+	bpy.types.WindowManager.viewY = bpy.props.IntProperty(
+			name = "Vertical View Resolution",
+			default = 455,
+			min = 0,
+			max = 10000,
+			description = "Resolution of an individual view in Y",
 			)
 	bpy.types.WindowManager.numDevicesConnected = bpy.props.IntProperty(
 			name = "Connected Devices",

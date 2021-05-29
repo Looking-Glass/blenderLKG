@@ -40,13 +40,12 @@ from . holoplay_service_api_commands import *
 #hp = None
 
 # some global vars we need to get rid of
-qs_width = 4096
-qs_height = 4096
-qs_viewWidth = 819
-qs_viewHeight = 455
+# qs_width = 4096
+# qs_height = 4096
+# qs_viewWidth = 819
+# qs_viewHeight = 455
 qs_columns = 5
 qs_rows = 9
-qs_numViews = 45
 
 hp_myQuilt = None
 hp_liveQuilt = None
@@ -137,13 +136,18 @@ class OffScreenDraw(bpy.types.Operator):
 
 		scene = context.scene
 
-		global qs_width
-		global qs_height
+		# global qs_width
+		# global qs_height
 		global qs_viewWidth
 		global qs_viewHeight
 		global qs_columns
 		global qs_rows
-		global qs_numViews
+		wm = context.window_manager
+		qs_columns = wm.tileX
+		qs_rows = wm.tileY
+		qs_viewWidth = wm.viewX
+		qs_viewHeight = wm.viewY
+		print("Updating Offscreens. qs_viewWidth: " + str(qs_viewWidth) + " qs_viewHeight: " + str(qs_viewHeight) + " qs_columns: " + str(qs_columns) + " qs_rows: " + str(qs_rows))
 
 		global hp_myQuilt
 		global hp_FBO
@@ -215,7 +219,10 @@ class OffScreenDraw(bpy.types.Operator):
 		# should be the same aspect ratio as the looking glass display
 		aspect_ratio = render.resolution_x / render.resolution_y
 
-		total_views = wm.tilesHorizontal * wm.tilesVertical
+		total_views = wm.tileX * wm.tileY
+		print("Drawing 3D view into texture, total number of views: " + str(total_views))
+		print("Tilex in X " + str(wm.tileX) + " and Y: " + str(wm.tileY))
+		print("Number of Offscreen buffers: " + str(len(offscreens)))
 
 		# check whether multiview render setup has been created
 		cam_parent = bpy.data.objects.get("Multiview")
@@ -277,7 +284,7 @@ class OffScreenDraw(bpy.types.Operator):
 				# should be the same aspect ratio as the looking glass display
 				aspect_ratio = render.resolution_x / render.resolution_y
 
-				total_views = wm.tilesHorizontal * wm.tilesVertical
+				total_views = wm.tileX * wm.tileY
 
 				# check whether multiview render setup has been created
 				cam_parent = bpy.data.objects.get("Multiview")
@@ -383,6 +390,9 @@ class OffScreenDraw(bpy.types.Operator):
 	def _setup_offscreens(context, num_offscreens=1):
 		''' Returns a list of num_offscreens off-screen buffers or one off-screen buffer directly '''
 		offscreens = list()
+		wm = context.window_manager
+		qs_viewWidth = wm.viewX
+		qs_viewHeight = wm.viewY
 		for i in range(num_offscreens):
 			try:
 				# edited this to be higher resolution, but it should be dynamic -k
@@ -420,6 +430,9 @@ class OffScreenDraw(bpy.types.Operator):
 		#global hp_myQuilt
 		global qs_width
 		global qs_height
+		wm = bpy.context.window_manager
+		qs_width = wm.quiltX
+		qs_height = wm.quiltY
 		quilt = Buffer(GL_INT, 1)
 		glGenTextures(1, quilt)
 		glBindTexture(GL_TEXTURE_2D, quilt[0])
@@ -456,7 +469,6 @@ class OffScreenDraw(bpy.types.Operator):
 		global qs_viewHeight
 		global qs_columns
 		global qs_rows
-		global qs_numViews
 
 		global hp_myQuilt
 		global hp_imgQuilt
@@ -543,7 +555,7 @@ class OffScreenDraw(bpy.types.Operator):
 
 		# when the user has loaded an image in the LKG tools panel, assume it is meant for viewing in the LKG as multiview
 		if LKG_image != None:
-			num_multiview_images = int(wm.tilesHorizontal * wm.tilesVertical)
+			num_multiview_images = int(wm.tileX * wm.tileY)
 			multiview_first_image_path = LKG_image.filepath
 			# split into file, view number and extension
 			multiview_image_path_split = multiview_first_image_path.rsplit('.',2)
@@ -570,6 +582,8 @@ class OffScreenDraw(bpy.types.Operator):
 		"""copy the current texture to a Blender image datablock"""
 		global hp_myQuilt
 		global hp_imgQuilt
+		global qs_width
+		global qs_height
 		global hp_imgDataBlockQuilt
 
 		print("Creating Buffer for Quilt")
@@ -596,6 +610,8 @@ class OffScreenDraw(bpy.types.Operator):
 		"""copy the current texture to a numpy array"""
 		global hp_myQuilt
 		global hp_imgQuilt
+		global qs_width
+		global qs_height
 		global hp_imgDataBlockQuilt
 
 		print("Creating Buffer for Quilt")
@@ -655,6 +671,8 @@ class OffScreenDraw(bpy.types.Operator):
 	def invoke(self, context, event):
 		global qs_viewWidth
 		global qs_viewHeight
+		global qs_width
+		global qs_height
 		global hp_myQuilt
 		global hp_imgQuilt
 		global hp
@@ -674,10 +692,10 @@ class OffScreenDraw(bpy.types.Operator):
 			wm = context.window_manager
 			
 			# quilt settings, put somewhere else
-			qs_width = 4096
-			qs_height = 4096
-			qs_columns = 5
-			qs_rows = 9
+			qs_width = wm.quiltX
+			qs_height = wm.quiltY
+			qs_columns = wm.tileX
+			qs_rows = wm.tileY
 			
 			qs_viewWidth = int(qs_width / qs_columns)
 			qs_viewHeight = int(qs_height / qs_rows)
@@ -731,6 +749,8 @@ class looking_glass_send_quilt_to_holoplay_service(bpy.types.Operator):
 		global qs_height
 		global sock
 
+		wm = bpy.context.window_manager
+
 		# print("Init Settings")
 		start_time = timeit.default_timer()
 
@@ -739,7 +759,7 @@ class looking_glass_send_quilt_to_holoplay_service(bpy.types.Operator):
 			self.report({"ERROR"}, "Could not connect to socket, aborting.")
 			return {"CANCELLED"}
 
-		qs_totalViews = 45
+		qs_totalViews = wm.tileX * wm.tileY
 		od = OffScreenDraw
 		if hp_myQuilt == None:
 			hp_myQuilt = od.setupMyQuilt(hp_myQuilt)
@@ -779,11 +799,12 @@ class looking_glass_save_quilt_as_image(bpy.types.Operator):
 		global hp_myQuilt
 		global qs_width
 		global qs_height
+		wm = bpy.context.window_manager
 
 		# print("Init Settings")
 		start_time = timeit.default_timer()
 
-		qs_totalViews = 45
+		qs_totalViews = wm.tileX * wm.tileY
 		od = OffScreenDraw
 		if hp_myQuilt == None:
 			hp_myQuilt = od.setupMyQuilt(hp_myQuilt)

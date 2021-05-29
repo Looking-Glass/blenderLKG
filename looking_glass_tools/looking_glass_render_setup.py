@@ -136,7 +136,7 @@ class lkgRenderSetup(bpy.types.Operator):
 		self.log.info("Creating Camera")
 		global fov
 		wm = bpy.context.window_manager
-		numViews = wm.tilesHorizontal * wm.tilesVertical
+		numViews = wm.tileX * wm.tileY
 		viewCone = wm.viewCone
 		
 		bpy.ops.object.camera_add(
@@ -210,7 +210,7 @@ class lkgRenderSetup(bpy.types.Operator):
 	def makeAllCameras(self, camCollection):
 		self.log.info("Make all cameras")
 		wm = bpy.context.window_manager
-		numViews = wm.tilesHorizontal * wm.tilesVertical
+		numViews = wm.tileX * wm.tileY
 		self.log.info("Creating %d Cameras" % numViews)
 		allCameras = []
 		for i in range(0, numViews):
@@ -234,19 +234,23 @@ class lkgRenderSetup(bpy.types.Operator):
 		global hp
 		wm = context.window_manager
 		render = context.scene.render
+		
 
-		if wm.tilesHorizontal == 5 and wm.tilesVertical == 9:
+		if wm.tileX == 5 and wm.tileY == 9:
 			render.resolution_x = 819
 			render.resolution_y = 455
-			render.pixel_aspect_x = 1.0
-			render.pixel_aspect_y = 1.125
-		elif wm.tilesHorizontal == 4 and wm.tilesVertical == 8:
-			render.resolution_x = 512
-			render.resolution_y = 256
-			render.pixel_aspect_x = 1.0
-			render.pixel_aspect_y = 1.25
+			# render.pixel_aspect_x = 1.0
+			# render.pixel_aspect_y = 1.125
+		elif wm.tileX == 8 and wm.tileY == 6: # portrait mode
+			render.resolution_x = 420
+			render.resolution_y = 560
+			# render.pixel_aspect_x = 1.0
+			# render.pixel_aspect_y = 1.25
 
 		resolution_aspect = render.resolution_x/render.resolution_y
+		pixel_aspect_y = resolution_aspect / hp_displayAspect
+		print("Pixel aspect ration Y: " + str(pixel_aspect_y))
+		render.pixel_aspect_y = pixel_aspect_y
 
 		if hp_displayAspect < 1.0:
 			render.pixel_aspect_x = 1.0
