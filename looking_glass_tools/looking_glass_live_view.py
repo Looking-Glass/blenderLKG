@@ -29,7 +29,8 @@ from bgl import *
 from math import *
 from mathutils import *
 from bpy.types import AddonPreferences, PropertyGroup
-from bpy.props import FloatProperty, PointerProperty
+from bpy.props import FloatProperty, PointerProperty, BoolProperty, StringProperty
+from bpy_extras.io_utils import ExportHelper
 from gpu_extras.presets import draw_texture_2d
 from gpu_extras.batch import batch_for_shader
 from . import looking_glass_settings
@@ -787,12 +788,29 @@ class looking_glass_send_quilt_to_holoplay_service(bpy.types.Operator):
 		print("Done.")
 		return {'FINISHED'}
 
-class looking_glass_save_quilt_as_image(bpy.types.Operator):
+class looking_glass_save_quilt_as_image(bpy.types.Operator, ExportHelper):
 	""" Creates a new window of type image editor """
 	bl_idname = "lookingglass.save_quilt_as_image"
 	bl_label = "Save Quilt"
 	bl_description = "Saves the currently open image or the live to disk as a quilt."
 	bl_options = {'REGISTER', 'UNDO'}
+
+	# ExportHelper mixin class uses this
+	filename_ext = ".png"
+
+	filter_glob: StringProperty(
+		default="*.png",
+		options={'HIDDEN'},
+		maxlen=255,  # Max internal buffer length, longer would be clamped.
+	)
+
+	# List of operator properties, the attributes will be assigned
+	# to the class instance from the operator settings before calling.
+	append_quilt_settings: BoolProperty(
+		name="Append Quilt Settings",
+		description="Append Quilt Settings, ie. _qs8x6a0.75, to the file name.",
+		default=True,
+	)
 
 	def execute(self, context):
 		global hp_imgDataBlockQuilt
@@ -800,8 +818,6 @@ class looking_glass_save_quilt_as_image(bpy.types.Operator):
 		global qs_width
 		global qs_height
 		wm = bpy.context.window_manager
-
-		# print("Init Settings")
 		start_time = timeit.default_timer()
 
 		qs_totalViews = wm.tileX * wm.tileY
@@ -825,11 +841,9 @@ class looking_glass_save_quilt_as_image(bpy.types.Operator):
 			print("Drawing into offscreens took: %.6f" % (timeit.default_timer() - start_time_offscreendraw))
 			start_time_quiltcopy = timeit.default_timer()
 			quilt = od.copy_quilt_from_texture_to_image_datablock(hp_myQuilt[0])
-			#quilt = od.copy_quilt_from_texture_to_numpy_array(hp_myQuilt[0])
 			print("Copying quilt into np array took: %.6f" % (timeit.default_timer() - start_time_quiltcopy))
-		# send_quilt(sock, quilt, duration=int(7))
-		# send_quilt_from_np(sock, quilt, duration=int(7))
-		# print("Done.")
+		quilt.filepath=self.filepath
+		quilt.save()
 		return {'FINISHED'}
 
 def menu_func(self, context):

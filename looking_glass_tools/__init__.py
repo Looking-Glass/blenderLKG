@@ -62,6 +62,7 @@ from math import *
 from mathutils import *
 from bpy.types import AddonPreferences, PropertyGroup
 from bpy.props import FloatProperty, PointerProperty
+from bpy_extras.io_utils import ExportHelper
 from . import cbor
 
 # global var to store the holoplay core instance
