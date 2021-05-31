@@ -170,7 +170,7 @@ class OffScreenDraw(bpy.types.Operator):
 					projection_matrices[view],
 					)
 				# print("Offscreen rendering: %.6f" % (timeit.default_timer() - start_time))
-		
+
 		# this is a workaround for https://developer.blender.org/T84402
 		for view, offscreen in enumerate(offscreens):
 			with offscreen.bind():
@@ -187,13 +187,13 @@ class OffScreenDraw(bpy.types.Operator):
 				''' alternate implementation using glBlitFramebuffer() '''
 				old_draw_framebuffer = Buffer(GL_INT, 1)
 				glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, old_draw_framebuffer)
-				
+
 				glBindFramebuffer(GL_DRAW_FRAMEBUFFER, hp_FBO[0])
 
-				glBlitFramebuffer(0, 0, qs_viewWidth, qs_viewHeight, 
-							x, y, x+qs_viewWidth, y+qs_viewHeight, 
+				glBlitFramebuffer(0, 0, qs_viewWidth, qs_viewHeight,
+							x, y, x+qs_viewWidth, y+qs_viewHeight,
 							GL_COLOR_BUFFER_BIT, GL_LINEAR)
-							
+
 				glBindFramebuffer(GL_DRAW_FRAMEBUFFER, old_draw_framebuffer[0])
 				# print("Copying to quilt: %.6f" % (timeit.default_timer() - start_time))
 
@@ -245,7 +245,7 @@ class OffScreenDraw(bpy.types.Operator):
 			except:
 				print("Active camera does not have a DoF object, using distance to World Origin instead")
 				convergence_vector = camera_active.location
-			
+
 			convergence_distance = convergence_vector.magnitude
 
 			size = convergence_distance * tan(view_cone * 0.5)
@@ -265,7 +265,7 @@ class OffScreenDraw(bpy.types.Operator):
 		# render the scene total_views times from different angles and store the results in a quilt
 		self.update_offscreens(self, context, offscreens,
 							modelview_matrices, projection_matrices, hp_myQuilt[0])
-		print("Rendered into texture id " + str(hp_myQuilt[0]))		
+		print("Rendered into texture id " + str(hp_myQuilt[0]))
 
 	@staticmethod
 	def draw_callback_px(self, context, offscreens, quilt, batch, shader):
@@ -307,7 +307,7 @@ class OffScreenDraw(bpy.types.Operator):
 					except:
 						print("Active camera does not have a DoF object, using distance to World Origin instead")
 						convergence_vector = camera_active.location
-					
+
 					convergence_distance = convergence_vector.magnitude
 
 					size = convergence_distance * tan(view_cone * 0.5)
@@ -370,7 +370,7 @@ class OffScreenDraw(bpy.types.Operator):
 		if OffScreenDraw._handle_draw_3dview is not None:
 				print("Removing Draw Handler from Image Editor")
 				bpy.types.SpaceView3D.draw_handler_remove(OffScreenDraw._handle_draw_3dview, 'WINDOW')
-				OffScreenDraw._handle_draw_3dview = None		
+				OffScreenDraw._handle_draw_3dview = None
 
 	@staticmethod
 	def handle_remove():
@@ -455,11 +455,11 @@ class OffScreenDraw(bpy.types.Operator):
 		glGenFramebuffers(1, fbo)
 		glBindFramebuffer(GL_FRAMEBUFFER, fbo[0])
 		glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, quilt[0], 0)
-		
+
 		# unbind the buffers
 		glBindFramebuffer(GL_FRAMEBUFFER, 0)
 		print("End of setup buffers")
-		return fbo       
+		return fbo
 
 	@staticmethod
 	def image_to_quilt(self, context, img, view):
@@ -492,7 +492,7 @@ class OffScreenDraw(bpy.types.Operator):
 			glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, img, 0)
 			# unbind the buffers
 			glBindFramebuffer(GL_FRAMEBUFFER, 0)
-			print("Setup of temporary framebuffer completed")       
+			print("Setup of temporary framebuffer completed")
 
 		old_read_framebuffer = Buffer(GL_INT, 1)
 		glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, old_read_framebuffer)
@@ -506,11 +506,11 @@ class OffScreenDraw(bpy.types.Operator):
 		x = int((view % qs_columns) * qs_viewWidth)
 		y = int(floor(view / qs_columns) * qs_viewHeight)
 
-		# glBlitFramebuffer(SourceX0, SourceY0, SourceX1, SourceY1, 
-		#               DestinationX0, DestinationY0, DestinationX1, DestinationY1, 
+		# glBlitFramebuffer(SourceX0, SourceY0, SourceX1, SourceY1,
+		#               DestinationX0, DestinationY0, DestinationX1, DestinationY1,
 		#               GL_COLOR_BUFFER_BIT, GL_LINEAR)
-		glBlitFramebuffer(0, 0, qs_viewWidth, qs_viewHeight, 
-					  x, y, x+qs_viewWidth, y+qs_viewHeight, 
+		glBlitFramebuffer(0, 0, qs_viewWidth, qs_viewHeight,
+					  x, y, x+qs_viewWidth, y+qs_viewHeight,
 					  GL_COLOR_BUFFER_BIT, GL_LINEAR)
 
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, old_read_framebuffer[0])
@@ -529,7 +529,7 @@ class OffScreenDraw(bpy.types.Operator):
 		if hp_imgQuilt == None:
 			hp_imgQuilt = self.setupMyQuilt(hp_imgQuilt)
 		if hp_FBO_img == None:
-			hp_FBO_img = self.setupBuffers(hp_FBO_img, hp_imgQuilt)		
+			hp_FBO_img = self.setupBuffers(hp_FBO_img, hp_imgQuilt)
 		for i, filepath in enumerate(filepaths):
 			LKG_image.filepath = filepath
 			LKG_image.gl_load()
@@ -539,7 +539,7 @@ class OffScreenDraw(bpy.types.Operator):
 			glBindTexture(GL_TEXTURE_2D, bc)
 			self.image_to_quilt(self, context, bc, i)
 			glBindTexture(GL_TEXTURE_2D, 0)
-		
+
 		# raw = hp_FBO_img.read(components=4, dtype='f4')
 		# buf = np.frombuffer(raw, dtype='f4')
 		# return self.copy_quilt_from_texture_to_image_datablock(hp_imgQuilt[0])
@@ -591,9 +591,9 @@ class OffScreenDraw(bpy.types.Operator):
 		glActiveTexture(GL_TEXTURE0)
 		glBindTexture(GL_TEXTURE_2D, quiltTexture)
 		#batch.draw(shader)
-		
-		bufferForQuilt = Buffer(GL_BYTE, qs_width * qs_height * 4)
-		glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, bufferForQuilt)
+
+		bufferForQuilt = Buffer(GL_FLOAT, qs_width * qs_height * 4)
+		glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, bufferForQuilt)
 		glBindTexture(GL_TEXTURE_2D, 0)
 
 		if hp_imgDataBlockQuilt == None:
@@ -601,8 +601,8 @@ class OffScreenDraw(bpy.types.Operator):
 			hp_imgDataBlockQuilt = bpy.data.images.new("hp_imgDataBlockQuilt", qs_width, qs_height, float_buffer=True)
 
 		start_time = timeit.default_timer()
-		buffer_list = [x / 255 for x in bufferForQuilt.to_list()]
-		hp_imgDataBlockQuilt.pixels.foreach_set(buffer_list)
+		# buffer_list = [x / 255 for x in bufferForQuilt.to_list()]
+		hp_imgDataBlockQuilt.pixels.foreach_set(bufferForQuilt)
 		print("Copying from buffer into image datablock took: %.6f" % (timeit.default_timer() - start_time))
 		return hp_imgDataBlockQuilt
 
@@ -618,14 +618,14 @@ class OffScreenDraw(bpy.types.Operator):
 		print("Creating Buffer for Quilt")
 		glActiveTexture(GL_TEXTURE0)
 		glBindTexture(GL_TEXTURE_2D, quiltTexture)
-		
+
 		bufferForQuilt = Buffer(GL_BYTE, qs_width * qs_height * 4)
 		glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, bufferForQuilt)
 		glBindTexture(GL_TEXTURE_2D, 0)
 
 		if hp_imgDataBlockQuilt == None:
 			hp_imgDataBlockQuilt = bpy.data.images.new("hp_imgDataBlockQuilt", qs_width, qs_height, float_buffer=True)
-		
+
 		# bottleneck
 		start_time = timeit.default_timer()
 		imageDataNp = np.empty(qs_width * qs_height * 4, dtype=np.uint8)
@@ -691,13 +691,13 @@ class OffScreenDraw(bpy.types.Operator):
 		else:
 			# get the global properties from window manager
 			wm = context.window_manager
-			
+
 			# quilt settings, put somewhere else
 			qs_width = wm.quiltX
 			qs_height = wm.quiltY
 			qs_columns = wm.tileX
 			qs_rows = wm.tileY
-			
+
 			qs_viewWidth = int(qs_width / qs_columns)
 			qs_viewHeight = int(qs_height / qs_rows)
 
@@ -723,7 +723,7 @@ class OffScreenDraw(bpy.types.Operator):
 				# change the render aspect ratio so the view in the looking glass does not get deformed
 				aspect_ratio = wm.screenW / wm.screenH
 				context.scene.render.resolution_x = context.scene.render.resolution_y * aspect_ratio
-			
+
 			# context.window_manager.modal_handler_add(self)
 			return {'RUNNING_MODAL'}
 
@@ -764,7 +764,7 @@ class looking_glass_send_quilt_to_holoplay_service(bpy.types.Operator):
 		od = OffScreenDraw
 		if hp_myQuilt == None:
 			hp_myQuilt = od.setupMyQuilt(hp_myQuilt)
-		LKG_image = context.scene.LKG_image		
+		LKG_image = context.scene.LKG_image
 		if LKG_image != None:
 			if LKG_image.name == 'Render Result':
 				self.report({"WARNING"}, "Sending a rendered image directly to HoloPlay Service is not supported yet. Please save the image to disk and load the first image of the multiview sequence.")
@@ -780,11 +780,11 @@ class looking_glass_send_quilt_to_holoplay_service(bpy.types.Operator):
 			od.draw_3dview_into_texture(od, context, offscreens)
 			print("Drawing into offscreens took: %.6f" % (timeit.default_timer() - start_time_offscreendraw))
 			start_time_quiltcopy = timeit.default_timer()
-			# quilt = od.copy_quilt_from_texture_to_image_datablock(hp_myQuilt[0])
-			quilt = od.copy_quilt_from_texture_to_numpy_array(hp_myQuilt[0])
+			quilt = od.copy_quilt_from_texture_to_image_datablock(hp_myQuilt[0])
+			# quilt = od.copy_quilt_from_texture_to_numpy_array(hp_myQuilt[0])
 			print("Copying quilt into np array took: %.6f" % (timeit.default_timer() - start_time_quiltcopy))
-		# send_quilt(sock, quilt, duration=int(7))
-		send_quilt_from_np(sock, quilt, duration=int(7))
+		send_quilt(sock, quilt, duration=int(7))
+		# send_quilt_from_np(sock, quilt, duration=int(7))
 		print("Done.")
 		return {'FINISHED'}
 
@@ -824,7 +824,7 @@ class looking_glass_save_quilt_as_image(bpy.types.Operator, ExportHelper):
 		od = OffScreenDraw
 		if hp_myQuilt == None:
 			hp_myQuilt = od.setupMyQuilt(hp_myQuilt)
-		LKG_image = context.scene.LKG_image		
+		LKG_image = context.scene.LKG_image
 		if LKG_image != None:
 			if LKG_image.name == 'Render Result':
 				self.report({"WARNING"}, "Sending a rendered image directly to HoloPlay Service is not supported yet. Please save the image to disk and load the first image of the multiview sequence.")
