@@ -40,7 +40,7 @@ def ensure_site_packages(packages):
 
     sys.path.append(site.getusersitepackages())
 
-    modules_to_install = [module[1] for module in packages if not importlib.util.find_spec(module[0])]   
+    modules_to_install = [module[1] for module in packages if not importlib.util.find_spec(module[0])]
 
     if modules_to_install:
         import subprocess
@@ -56,7 +56,7 @@ def ensure_site_packages(packages):
 def send_message(sock, inputObj):
     import pynng
     from . import cbor
-    
+
     out = cbor.dumps(inputObj)
     print("---------------")
     print("Command (" + str(len(out)) + " bytes, "+str(len(inputObj['bin']))+" binary): ")
@@ -102,6 +102,7 @@ def send_quilt(sock, quilt, duration=10):
 
     # we need to convert the floats to integers from 0-255 for most image formats like PNG or BMP which can be send to HoloPlay Service
     # np.multiply(px0, 255, out=px0, casting="unsafe")
+    px0 = px0 * 255
     pixels=px0.astype(np.uint8, order="C")
 
     pimg_time = timeit.default_timer()
