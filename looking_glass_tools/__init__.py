@@ -19,7 +19,7 @@
 bl_info = {
 	"name": "Looking Glass Toolset",
 	"author": "Gottfried Hofmann, Kyle Appelgate, Evan Kahn",
-	"version": (3, 1),
+	"version": (3, 0, 1),
 	"blender": (2, 92, 0),
 	"location": "3D View > Looking Glass Tab",
 	"description": "Creates a window showing the viewport from camera view ready for the looking glass display. Builds a render-setup for offline rendering looking glass-compatible images. Allows to view images rendered for looking glass by selecting the first image of the multiview sequence.",
@@ -87,7 +87,7 @@ class looking_glass_render_viewer(bpy.types.Panel):
 		layout = self.layout
 		layout.operator("lookingglass.render_setup", text="Create Render Setup", icon='PLUGIN')
 		layout.operator("lookingglass.send_quilt_to_holoplay_service", text="Send Quilt to Looking Glass", icon='CAMERA_STEREO')
-		layout.operator("lookingglass.save_quilt_as_image", text="Save Quilt to Image Datablock", icon='IMAGE')
+#		layout.operator("lookingglass.save_quilt_as_image", text="Save Quilt to Image Datablock", icon='IMAGE')
 		# layout.operator("view3d.offscreen_draw", text="Start/Stop Live View", icon='CAMERA_STEREO')
 
 		row = layout.row(align = True)
