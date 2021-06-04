@@ -500,7 +500,7 @@ class OffScreenDraw(bpy.types.Operator):
 
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, hp_FBO_tmp[0])
 		glFramebufferTexture(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, img, 0)
-		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, hp_FBO_img[0])
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, hp_FBO_img[0])			
 
 		x = int((view % qs_columns) * qs_viewWidth)
 		y = int(floor(view / qs_columns) * qs_viewHeight)

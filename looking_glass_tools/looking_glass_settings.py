@@ -215,10 +215,18 @@ def init():
             print("Reading settings from device")
             screenW = devices[0]['calibration']['screenW']['value']
             screenH = devices[0]['calibration']['screenH']['value']
-            quiltX = devices[0]['defaultQuilt']['quiltX']
-            quiltY = devices[0]['defaultQuilt']['quiltY']
-            tileX = devices[0]['defaultQuilt']['tileX']
-            tileY = devices[0]['defaultQuilt']['tileY']
+            if 'defaultQuilt' in devices[0]: # see if we can find the device presets
+                quiltX = devices[0]['defaultQuilt']['quiltX']
+                quiltY = devices[0]['defaultQuilt']['quiltY']
+                tileX = devices[0]['defaultQuilt']['tileX']
+                tileY = devices[0]['defaultQuilt']['tileY']
+                print("Setting view values from device")
+            else: # or fallback to portrait defaults - this is pretty hacky but fixes a user issue we've seen
+                quiltX = 3360
+                quiltY = 3360
+                tileX = 8
+                tileY = 6
+                print("Warning! Couldn't fine proper tiling settings! Using default Portrait values as fallback.")
             hardwareVersion = devices[0]['hardwareVersion'] # not storing this in wm because we need to change this to support multiple devices in the future
             aspect = screenW / screenH
             wm.screenW = screenW
