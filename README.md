@@ -1,5 +1,10 @@
-*Last updated: May 06, 2021*
+*Last updated: August 30th, 2021*
 *Version: 3.1*
+
+## Update: Deprecated!
+Our Blender add-on has moved on! The official solution for using Looking Glass devices with Blender is now [**our community plugin, AliceLG**](https://github.com/regcs/AliceLG/tree/alice-lg-2.0). Please use version 2.0 onward of that tool instead as we will no longer be updating or maintaining this repository.
+
+### Readme
 
 This Getting Started Guide is for the Blender Add-on created specifically for use with the Looking Glass. It features live-display of the camera view in the image editor, an automatic render-setup for Cycles and the option to view rendered multi-view image sequences in the Looking Glass.
 
